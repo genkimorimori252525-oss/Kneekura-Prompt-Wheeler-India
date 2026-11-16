@@ -1,6 +1,7 @@
 /* Desktop shell only. The web app remains visually unchanged. */
 .quick-prompt-title,.quick-copy,.wheel-hint-desktop,.desktop-controls{display:none}
 body.desktop-mode{min-height:100vh;overflow-x:hidden}
+body.desktop-mode .ambient{display:none}
 body.desktop-mode .app{max-width:none;padding:0 18px}
 body.desktop-mode .topbar{min-height:60px}
 body.desktop-mode .topbar-right{gap:12px}
