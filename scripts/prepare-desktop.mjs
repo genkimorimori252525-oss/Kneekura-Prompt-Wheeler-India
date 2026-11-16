@@ -1,3 +1,4 @@
+import "./generate-icons.mjs";
 import { copyFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
