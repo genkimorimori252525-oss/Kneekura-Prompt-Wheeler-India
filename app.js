@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   const FAVORITES_KEY = "kneekura.prompt-wheel.favorites.v1";
-  const state = { categories: [], prompts: [], turn: 0, search: "", favoritesOnly: false, favorites: new Set(), wheelAccum: 0, wheelAt: 0 };
+  const state = { categories: [], prompts: [], turn: 0, search: "", favoritesOnly: false, favorites: new Set(), wheelAccum: 0, wheelAt: 0, promptIndices: Object.create(null), promptAccum: 0, promptAt: 0 };
   const $ = (id) => document.getElementById(id);
   const modulo = (n, m) => ((n % m) + m) % m;
   const make = (tag, className, value) => {
@@ -55,6 +55,32 @@
     return copied;
   }
 
+  function quickPrompt() {
+    const category = currentCategory();
+    if (!category) return null;
+    const choices = state.prompts.filter((p) => p.category === category.id);
+    if (!choices.length) return null;
+    const index = modulo(state.promptIndices[category.id] || 0, choices.length);
+    return choices[index];
+  }
+
+  function updateQuickPrompt() {
+    const picked = quickPrompt();
+    $("quickPromptTitle").textContent = picked ? picked.title : "プロンプトなし";
+    $("quickCopy").disabled = !picked;
+    $("quickCopy").setAttribute("aria-label", picked ? picked.title + "をコピー" : "コピー不可");
+  }
+
+  function spinPrompt(direction) {
+    const category = currentCategory();
+    if (!category) return;
+    const options = state.prompts.filter((p) => p.category === category.id);
+    if (!options.length) return;
+    state.promptIndices[category.id] = modulo((state.promptIndices[category.id] || 0) + direction, options.length);
+    updateQuickPrompt();
+    renderCards();
+  }
+
   function showRing() {
     const categories = state.categories;
     if (!categories.length) return;
@@ -72,6 +98,7 @@
     $("currentIcon").style.color = center.color;
     $("currentLabel").textContent = center.short;
     $("currentCount").textContent = state.prompts.filter((p) => p.category === center.id).length + " PROMPTS";
+    updateQuickPrompt();
     $("wheelStage").setAttribute("aria-label", "ジャンルホイール。現在は" + center.label + "。ホイール、左右キー、各ジャンルを選択できます");
 
     for (const node of $("orbit").children) {
@@ -116,6 +143,7 @@
 
   function cardFor(prompt) {
     const card = make("article", "prompt-card");
+    if (prompt.id === quickPrompt()?.id) card.classList.add("quick-selected");
     const top = make("div", "card-top");
     const info = make("div", "card-info");
     info.append(make("h4", "card-title", prompt.title), make("p", "card-summary", prompt.summary));
@@ -202,6 +230,10 @@
   }
 
   function bind() {
+    $("quickCopy").addEventListener("click", async () => {
+      const picked = quickPrompt();
+      if (picked) toast(await copyText(picked.prompt) ? "プロンプトをコピーしました" : "コピーに失敗しました");
+    });
     $("prevCategory").addEventListener("click", () => spin(-1));
     $("nextCategory").addEventListener("click", () => spin(1));
     $("wheelStage").addEventListener("wheel", (event) => {
@@ -209,9 +241,20 @@
       event.preventDefault();
       state.wheelAccum += event.deltaY;
       const now = Date.now();
-      if (Math.abs(state.wheelAccum) >= 65 && now - state.wheelAt >= 160) {
+      const inCenter = document.body.classList.contains("desktop-mode") && !!event.target.closest(".wheel-center");
+      if (inCenter) {
+        state.promptAccum += event.deltaY;
+        state.wheelAccum = 0;
+        if (Math.abs(state.promptAccum) >= 55 && now - state.promptAt >= 155) {
+          const direction = Math.sign(state.promptAccum);
+          state.promptAccum = 0;
+          state.promptAt = now;
+          spinPrompt(direction);
+        }
+      } else if (Math.abs(state.wheelAccum) >= 65 && now - state.wheelAt >= 160) {
         const direction = Math.sign(state.wheelAccum);
         state.wheelAccum = 0;
+        state.promptAccum = 0;
         state.wheelAt = now;
         spin(direction);
       }
@@ -219,10 +262,10 @@
     $("wheelStage").addEventListener("keydown", (event) => {
       if (event.target.tagName === "BUTTON") return;
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-        event.preventDefault(); spin(1);
+        event.preventDefault(); if (event.altKey) spinPrompt(1); else spin(1);
       }
       if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-        event.preventDefault(); spin(-1);
+        event.preventDefault(); if (event.altKey) spinPrompt(-1); else spin(-1);
       }
     });
     $("searchInput").addEventListener("input", (event) => {
