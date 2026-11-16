@@ -1,0 +1,16 @@
+{
+  "name": "kneekura-prompt-wheeler",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lightweight Tauri desktop prompt wheel with an independent static web version",
+  "scripts": {
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:serve": "node scripts/prepare-desktop.mjs && node scripts/serve-desktop.mjs",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "desktop:check": "node --check app.js && node --check desktop.js && node --check scripts/generate-icons.mjs && node scripts/validate-catalog.mjs && node scripts/prepare-desktop.mjs && node scripts/check-desktop.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
