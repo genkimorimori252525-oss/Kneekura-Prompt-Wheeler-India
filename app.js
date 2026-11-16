@@ -260,7 +260,6 @@
       }
     }, { passive: false });
     $("wheelStage").addEventListener("keydown", (event) => {
-      if (event.target.tagName === "BUTTON") return;
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
         event.preventDefault(); if (event.altKey) spinPrompt(1); else spin(1);
       }
