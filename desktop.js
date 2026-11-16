@@ -100,6 +100,15 @@
     } finally { updating = false; }
   }
 
+  // Searching from the tiny widget first expands the list; never focus a hidden input.
+  document.addEventListener("keydown", async (event) => {
+    if (prefs.compact && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      await toggleMode();
+      if (!prefs.compact) $("searchInput").focus();
+    }
+  }, { capture: true });
   $("pinToggle").addEventListener("click", togglePin);
   $("modeToggle").addEventListener("click", toggleMode);
   $("hideWindow").addEventListener("click", async () => {
