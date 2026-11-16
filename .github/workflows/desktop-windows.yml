@@ -12,6 +12,9 @@ on:
       - "scripts/**"
       - "package.json"
       - ".github/workflows/desktop-windows.yml"
+concurrency:
+  group: windows-desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
