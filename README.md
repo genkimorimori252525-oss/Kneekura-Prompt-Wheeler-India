@@ -53,6 +53,12 @@ WindowsのNSISインストーラーは `src-tauri/target/release/bundle/nsis/` �
 
 JSONデータ・JavaScript構文・静的アセット・Tauri設定・画像ヘッダを自動チェックします。Windowsでの実際のインストール、タスクトレイ、ホイール感度、マルチモニター、アイコン表示、画面操作は別途実機検証が必要です。
 
+## 収集元の方針（2026-11-16 決定）
+
+新しいプロンプトの**主たる収集元は [prompts.chat](https://prompts.chat/)（[データ配布: f/prompts.chat](https://github.com/f/prompts.chat)）**とする。公開されている `prompts.csv` / `PROMPTS.md` のプロンプトデータは CC0 1.0 と明記されている。コードとサイト制作物は別ライセンス（MIT）なので混同しない。
+
+既存の45件（ユーザー提供のVox 6件・Reddit由来の再構成20件・独自19件）は出典を保持して残す。**収集元の変更は既存データの自動置換を意味しない**。今後の追加は、原典識別子とライセンス・本文言語・ジャンル・重複有無を確認して整理する。外部データを起動時に自動取得せず、確認済みのローカル収録データを使う。
+
 ## データと出典
 
 `data/prompts.json` が正本です。各項目に `id`, `title`, `category`, `summary`, `prompt`, `source` を持ち、画像由来の6件には `promptEn` も付けています。
