@@ -37,11 +37,11 @@ const PANEL_H: f32 = 416.0;
 const DWELL: f64 = 1.5;
 // A hard spin must be held: the wheel has to keep turning fast for the whole of TURBO_HOLD.
 // That window is cut into TURBO_SLICES equal slices and every slice needs TURBO_PER_SLICE notches,
-// so one big flick (which empties within a slice or two) never qualifies. 4 notches per 0.3 s is
-// about 13 a second, held for 1.2 s.
-const TURBO_HOLD: f64 = 1.2;
-const TURBO_SLICES: usize = 4;
-const TURBO_PER_SLICE: f32 = 4.0;
+// so one big flick (which empties within a slice or two) never qualifies. 12 notches per 0.5 s is
+// 24 a second, held for 3 s: a wheel that is being spun on purpose, not scrolled.
+const TURBO_HOLD: f64 = 3.0;
+const TURBO_SLICES: usize = 6;
+const TURBO_PER_SLICE: f32 = 12.0;
 const CORNERS: [(f32, f32); 4] = [(-139.0, -139.0), (139.0, -139.0), (139.0, 139.0), (-139.0, 139.0)];
 
 // Sumi-ink ground with warm paper-coloured type; the genre colours (data/prompts.json) are
