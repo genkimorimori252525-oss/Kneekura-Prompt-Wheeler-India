@@ -1785,7 +1785,7 @@ impl App {
             fx.actions.push(Action::Pin(!self.saved.pinned));
         }
         y += 32.0;
-        if toggle_row(ui, painter, "play", (left, right, y), "遊びの演出（火花・落下・爆散）", self.saved.play, col, alpha) {
+        if toggle_row(ui, painter, "play", (left, right, y), "演出", self.saved.play, col, alpha) {
             self.saved.play = !self.saved.play;
             self.dirty = Some(self.last_frame);
         }
