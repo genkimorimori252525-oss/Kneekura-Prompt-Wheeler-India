@@ -35,7 +35,13 @@ const PANEL_W: f32 = 300.0;
 const PANEL_GAP: f32 = 16.0;
 const PANEL_H: f32 = 416.0;
 const DWELL: f64 = 1.5;
-const TURBO_NOTCHES: f32 = 9.0;
+// A hard spin must be held: the wheel has to keep turning fast for the whole of TURBO_HOLD.
+// That window is cut into TURBO_SLICES equal slices and every slice needs TURBO_PER_SLICE notches,
+// so one big flick (which empties within a slice or two) never qualifies. 4 notches per 0.3 s is
+// about 13 a second, held for 1.2 s.
+const TURBO_HOLD: f64 = 1.2;
+const TURBO_SLICES: usize = 4;
+const TURBO_PER_SLICE: f32 = 4.0;
 const CORNERS: [(f32, f32); 4] = [(-139.0, -139.0), (139.0, -139.0), (139.0, 139.0), (-139.0, 139.0)];
 
 // Sumi-ink ground with warm paper-coloured type; the genre colours (data/prompts.json) are
@@ -667,6 +673,19 @@ impl App {
 
     // ----- play -----
 
+    /// True when the wheel has been turned fast for the whole of the last TURBO_HOLD seconds.
+    fn spin_sustained(&self, now: f64) -> bool {
+        let slice = TURBO_HOLD / TURBO_SLICES as f64;
+        let mut counts = [0.0_f32; TURBO_SLICES];
+        for (at, amount) in &self.notches {
+            let age = now - at;
+            if (0.0..TURBO_HOLD).contains(&age) {
+                counts[(age / slice) as usize] += amount;
+            }
+        }
+        counts.iter().all(|count| *count >= TURBO_PER_SLICE)
+    }
+
     /// Uniform random number in 0..1 (xorshift; quality is irrelevant here, only variety).
     fn rand(&mut self) -> f32 {
         self.rng ^= self.rng << 13;
@@ -1068,7 +1087,7 @@ impl App {
         if dy != 0.0 {
             self.notches.push((now, dy.abs()));
         }
-        self.notches.retain(|(at, _)| now - at < 0.4);
+        self.notches.retain(|(at, _)| now - at < TURBO_HOLD);
         if self.wheel_acc.abs() >= 1.0 && now - self.wheel_at >= 0.07 {
             let dir = -self.wheel_acc.signum() as i32;
             self.wheel_acc -= self.wheel_acc.signum();
@@ -1210,10 +1229,8 @@ impl App {
                     self.step_selection(dir, now);
                     self.open_list(now, false);
                 } else if d <= R_OUT + 10.0 {
-                    // Only a real flick lets the dial run: nine or more notches inside 0.4 s, which
-                    // ordinary scrolling through genres does not reach.
-                    let flick: f32 = self.notches.iter().map(|(_, amount)| amount).sum();
-                    if flick >= TURBO_NOTCHES && self.saved.play {
+                    // Only a spin that is kept up lets the dial run (see TURBO_HOLD).
+                    if self.spin_sustained(now) && self.saved.play {
                         self.notches.clear();
                         self.wheel_acc = 0.0;
                         self.turbo_spin(dir, now);
