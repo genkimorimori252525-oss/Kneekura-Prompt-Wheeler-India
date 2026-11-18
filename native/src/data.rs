@@ -102,6 +102,9 @@ pub struct Saved {
     pub mini: bool,
     #[serde(default = "default_true")]
     pub pinned: bool,
+    /// Window layout the saved position refers to; lets a newer build migrate it.
+    #[serde(default)]
+    pub layout: u32,
 }
 
 impl Default for Saved {
@@ -115,6 +118,7 @@ impl Default for Saved {
             pos: None,
             mini: false,
             pinned: true,
+            layout: 2,
         }
     }
 }

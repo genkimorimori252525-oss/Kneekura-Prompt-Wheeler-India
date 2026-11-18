@@ -24,8 +24,8 @@ use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::{Window, WindowId, WindowLevel};
 
 const TITLE: &str = "Kneekura Prompt Wheeler";
-const WIN: Vec2 = Vec2::new(960.0, 440.0);
-const C: Pos2 = Pos2::new(480.0, 220.0);
+const WIN: Vec2 = Vec2::new(960.0, 600.0);
+const C: Pos2 = Pos2::new(480.0, 300.0);
 const R_OUT: f32 = 150.0;
 const R_IN: f32 = 98.0;
 const R_CORE: f32 = 86.0;
@@ -33,6 +33,7 @@ const R_PUCK: f32 = 26.0;
 const GAP_DEG: f32 = 1.6;
 const PANEL_W: f32 = 300.0;
 const PANEL_GAP: f32 = 16.0;
+const PANEL_H: f32 = 416.0;
 const DWELL: f64 = 1.5;
 const CORNERS: [(f32, f32); 4] = [(-139.0, -139.0), (139.0, -139.0), (139.0, 139.0), (-139.0, 139.0)];
 
@@ -225,7 +226,7 @@ fn approach(value: &mut f32, target: f32, dt: f32, speed: f32) -> bool {
 fn panel_rect(side: f32) -> Rect {
     let edge = C.x + side * (R_OUT + PANEL_GAP);
     let (left, right) = if side > 0.0 { (edge, edge + PANEL_W) } else { (edge - PANEL_W, edge) };
-    Rect::from_min_max(pos2(left, 12.0), pos2(right, WIN.y - 12.0))
+    Rect::from_min_max(pos2(left, C.y - PANEL_H / 2.0), pos2(right, C.y + PANEL_H / 2.0))
 }
 fn galley(ui: &egui::Ui, text: &str, id: FontId, color: Color32, width: f32, rows: usize, line: Option<f32>, center: bool) -> Arc<egui::Galley> {
     let format = egui::TextFormat { font_id: id, color, line_height: line, ..Default::default() };
@@ -235,6 +236,75 @@ fn galley(ui: &egui::Ui, text: &str, id: FontId, color: Color32, width: f32, row
         job.halign = egui::Align::Center;
     }
     ui.fonts_mut(|f| f.layout_job(job))
+}
+
+// ---------- play: sparks and the burst ----------
+
+/// A hot fleck thrown off the dial; drawn as a short streak along its velocity.
+struct Spark {
+    pos: Pos2,
+    vel: Vec2,
+    age: f32,
+    life: f32,
+}
+
+/// Where one part of the wheel flies to when the wheel is shaken apart.
+struct Shard {
+    off: Vec2,
+    curl: f32,
+    spin: f32,
+    delay: f32,
+}
+
+/// Shaking the wheel throws every part out along a random path, holds, then runs the very same
+/// motion backwards. Because each part's place is a pure function of one clock, the return is an
+/// exact reverse playback rather than a second animation.
+struct Burst {
+    start: f64,
+    shards: Vec<Shard>,
+}
+
+const BURST_OUT: f32 = 0.62;
+const BURST_STAGGER: f32 = 0.16;
+const BURST_HOLD: f32 = 0.75;
+const BURST_BACK: f32 = 1.05;
+
+impl Burst {
+    /// Position on the outward timeline at `t` seconds, or None once everything is home again.
+    fn clock(t: f32) -> Option<f32> {
+        let span = BURST_OUT + BURST_STAGGER;
+        if t < span {
+            Some(t)
+        } else if t < span + BURST_HOLD {
+            Some(span)
+        } else if t < span + BURST_HOLD + BURST_BACK {
+            let u = (t - span - BURST_HOLD) / BURST_BACK;
+            Some(span * (1.0 - u * u * (3.0 - 2.0 * u)))
+        } else {
+            None
+        }
+    }
+    /// How far part `index` is along its path (0 = home, 1 = fully flung).
+    fn amount(&self, index: usize, clock: f32) -> f32 {
+        ease((clock - self.shards[index].delay) / BURST_OUT)
+    }
+    /// Move a point that belongs to part `index`, whose resting centre is `home`.
+    fn place(&self, index: usize, clock: f32, home: Pos2, point: Pos2) -> Pos2 {
+        let shard = &self.shards[index];
+        let k = self.amount(index, clock);
+        let turn = |v: Vec2, angle: f32| vec2(v.x * angle.cos() - v.y * angle.sin(), v.x * angle.sin() + v.y * angle.cos());
+        home + turn(point - home, shard.spin * k) + turn(shard.off * k, shard.curl * (1.0 - k))
+    }
+}
+
+/// Tracks a hand-dragged window and counts direction reversals to notice a shake.
+struct Drag {
+    cursor0: (i32, i32),
+    window0: (i32, i32),
+    last: (i32, i32),
+    heading: [i32; 2],
+    travel: [f32; 2],
+    flips: Vec<f64>,
 }
 
 // ---------- app state ----------
@@ -349,6 +419,16 @@ struct App {
     edit: EditBuf,
 
     flash: Option<(f64, String, bool)>,
+    rng: u32,
+    sparks: Vec<Spark>,
+    burst: Option<Burst>,
+    snap: Option<f64>,
+    drag: Option<Drag>,
+    turbo: bool,
+    prev_rot: f32,
+    spin_streak: u32,
+    spin_last: f64,
+    spin_dir: i32,
     wheel_acc: f32,
     wheel_at: f64,
 }
@@ -390,7 +470,7 @@ impl App {
             op: 1.0,
             panel: Panel::Closed,
             panel_t: 0.0,
-            panel_h: WIN.y - 24.0,
+            panel_h: PANEL_H,
             scale_draft: None,
             locked: false,
             dwell: None,
@@ -403,6 +483,16 @@ impl App {
             fav_only: false,
             edit: EditBuf::default(),
             flash: None,
+            rng: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0x9e37_79b9, |d| d.subsec_nanos() | 1),
+            sparks: Vec::new(),
+            burst: None,
+            snap: None,
+            drag: None,
+            turbo: false,
+            prev_rot: 0.0,
+            spin_streak: 0,
+            spin_last: 0.0,
+            spin_dir: 0,
             wheel_acc: 0.0,
             wheel_at: 0.0,
         }
@@ -539,11 +629,122 @@ impl App {
         self.items = data::merge(&self.cats, &self.base, &self.saved);
     }
 
+    // ----- play -----
+
+    /// Uniform random number in 0..1 (xorshift; quality is irrelevant here, only variety).
+    fn rand(&mut self) -> f32 {
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 17;
+        self.rng ^= self.rng << 5;
+        (self.rng >> 8) as f32 / (1u32 << 24) as f32
+    }
+    fn spark(&mut self, pos: Pos2, vel: Vec2, life: f32) {
+        if self.sparks.len() < 400 {
+            self.sparks.push(Spark { pos, vel, age: 0.0, life });
+        }
+    }
+    /// A hard flick of the mouse wheel: several whole turns to a random genre, with sparks.
+    fn turbo_spin(&mut self, dir: i32, now: f64) {
+        let n = self.cats.len() as i32;
+        let extra = n * 3 + (self.rand() * n as f32) as i32;
+        self.turn += dir * extra;
+        self.turbo = true;
+        self.close_panel();
+        self.genre_changed(now);
+    }
+    /// Throw every part of the wheel somewhere new. Targets, arcs, tumble and timing are all random.
+    fn start_burst(&mut self, now: f64) {
+        self.close_panel();
+        let parts = self.cats.len() + 1 + CORNERS.len();
+        let mut shards = Vec::with_capacity(parts);
+        for _ in 0..parts {
+            // Aim anywhere in the window, but always a real distance from the centre.
+            let mut off = Vec2::ZERO;
+            for _ in 0..8 {
+                let target = pos2(lerp(70.0, WIN.x - 70.0, self.rand()), lerp(60.0, WIN.y - 60.0, self.rand()));
+                off = target - C;
+                if off.length() > 150.0 {
+                    break;
+                }
+            }
+            let sign = if self.rand() < 0.5 { -1.0 } else { 1.0 };
+            shards.push(Shard { off, curl: (self.rand() - 0.5) * 2.2, spin: sign * lerp(0.8, 3.4, self.rand()), delay: self.rand() * BURST_STAGGER });
+        }
+        self.burst = Some(Burst { start: now, shards });
+        for _ in 0..70 {
+            let (angle, speed) = (self.rand() * 360.0, lerp(160.0, 720.0, self.rand()));
+            let life = lerp(0.35, 0.9, self.rand());
+            let from = C + polar(lerp(20.0, R_OUT, self.rand()), angle);
+            self.spark(from, polar(speed, angle), life);
+        }
+    }
+    /// Move the window with the pointer ourselves (no OS move loop), so frames keep coming and a
+    /// shake can be seen as it happens. Returns true when the motion amounts to a shake.
+    fn follow_drag(&mut self, now: f64) -> bool {
+        let Some(cursor) = win::cursor_pos() else { return false };
+        let Some(drag) = self.drag.as_mut() else { return false };
+        win::move_to(self.hwnd, drag.window0.0 + cursor.0 - drag.cursor0.0, drag.window0.1 + cursor.1 - drag.cursor0.1);
+        let delta = [cursor.0 - drag.last.0, cursor.1 - drag.last.1];
+        drag.last = cursor;
+        for axis in 0..2 {
+            if delta[axis].abs() < 2 {
+                continue;
+            }
+            let heading = delta[axis].signum();
+            if drag.heading[axis] != 0 && heading != drag.heading[axis] {
+                // Only a decent stroke counts, so an ordinary wobbly drag is not a shake.
+                if drag.travel[axis] >= 26.0 {
+                    drag.flips.push(now);
+                }
+                drag.travel[axis] = 0.0;
+            }
+            drag.heading[axis] = heading;
+            drag.travel[axis] += delta[axis].abs() as f32;
+        }
+        drag.flips.retain(|at| now - at < 1.0);
+        if drag.flips.len() >= 5 {
+            drag.flips.clear();
+            return true;
+        }
+        false
+    }
+    fn draw_sparks(&mut self, painter: &egui::Painter, dt: f32) -> bool {
+        for spark in &mut self.sparks {
+            spark.age += dt;
+            spark.vel.y += 640.0 * dt;
+            spark.vel *= 1.0 - (1.4 * dt).min(0.9);
+            spark.pos += spark.vel * dt;
+        }
+        self.sparks.retain(|spark| spark.age < spark.life);
+        let ember = Color32::from_rgb(238, 112, 48);
+        for spark in &self.sparks {
+            let t = spark.age / spark.life;
+            let color = if t < 0.35 { mix(Color32::WHITE, GOLD, t / 0.35) } else { mix(GOLD, ember, (t - 0.35) / 0.65) };
+            let tail = spark.pos - spark.vel * 0.04;
+            painter.line_segment([tail, spark.pos], Stroke::new(lerp(2.4, 0.8, t), fade(color, (1.0 - t).powf(1.4))));
+        }
+        !self.sparks.is_empty()
+    }
+
     // ----- native window -----
 
     fn restore_window(&mut self, ctx: &egui::Context) {
+        // Layout 2 made the window 160 points taller with the wheel still in its middle; shift
+        // positions saved by the older layout so the wheel stays where the user left it.
+        if self.saved.layout < 2 {
+            if let Some(pos) = self.saved.pos.as_mut() {
+                pos[1] -= (80.0 * ctx.pixels_per_point()).round() as i32;
+            }
+            self.saved.layout = 2;
+            self.dirty = Some(0.0);
+        }
         if let Some([x, y]) = self.saved.pos {
             win::move_to(self.hwnd, x, y);
+        }
+        // An open wheel must be fully on screen; this is a correction, not a temporary nudge.
+        if !self.mini {
+            self.fit_wheel(ctx);
+            self.mini_shift = (0, 0);
         }
         // If the saved spot is no longer on any screen (monitor unplugged), come back to the middle.
         if let (Some(r), Some(w)) = (win::window_rect(self.hwnd), win::work_area(self.hwnd)) {
@@ -785,10 +986,15 @@ impl App {
             }
             (dy, i.modifiers.ctrl)
         });
-        self.wheel_acc += dy;
+        // Notches are queued, not dropped: a flick of six notches becomes six steps in quick
+        // succession, which is also how a hard spin is recognised. Reversing clears the queue.
+        if dy != 0.0 && dy.signum() != self.wheel_acc.signum() {
+            self.wheel_acc = 0.0;
+        }
+        self.wheel_acc = (self.wheel_acc + dy).clamp(-8.0, 8.0);
         if self.wheel_acc.abs() >= 1.0 && now - self.wheel_at >= 0.07 {
             let dir = -self.wheel_acc.signum() as i32;
-            self.wheel_acc = 0.0;
+            self.wheel_acc -= self.wheel_acc.signum();
             self.wheel_at = now;
             return (dir, ctrl);
         }
@@ -801,10 +1007,40 @@ impl App {
         let ctx = ui.ctx().clone();
         let bg = ui.interact(ui.max_rect(), ui.id().with("background"), Sense::click_and_drag());
         if bg.drag_started() {
-            let _ = self.window.drag_window();
+            if let (Some(cursor), Some(r)) = (win::cursor_pos(), win::window_rect(self.hwnd)) {
+                self.mini_shift = (0, 0);
+                self.drag = Some(Drag { cursor0: cursor, window0: (r[0], r[1]), last: cursor, heading: [0; 2], travel: [0.0; 2], flips: Vec::new() });
+            }
         }
-        let ptr = if hot { ui.input(|i| i.pointer.hover_pos()) } else { None };
-        let click = if bg.clicked() { bg.interact_pointer_pos() } else { None };
+        if self.drag.is_some() {
+            if !ui.input(|i| i.pointer.primary_down()) {
+                self.drag = None;
+            } else {
+                fx.anim = true;
+                if self.follow_drag(now) && self.burst.is_none() && !self.mini && self.mini_t > 0.98 {
+                    self.start_burst(now);
+                }
+            }
+        }
+        // While the wheel is in pieces nothing on it can be pointed at.
+        let burst_clock = match &self.burst {
+            Some(burst) => {
+                let clock = Burst::clock((now - burst.start) as f32);
+                if clock.is_none() {
+                    self.snap = Some(now);
+                }
+                clock
+            }
+            None => None,
+        };
+        if burst_clock.is_none() {
+            self.burst = None;
+        } else {
+            fx.anim = true;
+        }
+        let scattered = self.burst.is_some();
+        let ptr = if hot && !scattered { ui.input(|i| i.pointer.hover_pos()) } else { None };
+        let click = if bg.clicked() && !scattered { bg.interact_pointer_pos() } else { None };
         let mut io = Io { ptr, click, hand: false };
         let typing = ctx.egui_wants_keyboard_input();
         if hot {
@@ -826,7 +1062,32 @@ impl App {
         let step = 360.0 / n as f32;
         // The active genre faces the panel, so the list visibly grows out of it.
         let facing = if self.side > 0.0 { 0.0 } else { 180.0 };
-        fx.anim |= approach(&mut self.rot, facing - self.turn as f32 * step - (1.0 - m) * 140.0, dt, 11.0);
+        let rot_target = facing - self.turn as f32 * step - (1.0 - m) * 140.0;
+        fx.anim |= approach(&mut self.rot, rot_target, dt, if self.turbo { 3.0 } else { 11.0 });
+        let omega = (self.rot - self.prev_rot) / dt; // degrees per second, clockwise positive
+        self.prev_rot = self.rot;
+        let blur = if self.turbo { (omega.abs() / 900.0).clamp(0.0, 1.0) } else { 0.0 };
+        if self.turbo {
+            if (self.rot - rot_target).abs() < 1.5 {
+                self.turbo = false;
+            } else {
+                // The list waits until the dial has come to rest.
+                if self.dwell.is_some() {
+                    self.dwell = Some(now);
+                }
+                // Sparks fly off the rim where the dial passes the pointer, thrown along the direction of travel.
+                let heading = omega.signum();
+                let count = ((omega.abs() / 420.0) as usize).min(7);
+                for _ in 0..count {
+                    let at = C + polar(R_OUT + 3.0, facing + (self.rand() - 0.5) * 10.0);
+                    let tangent = polar(1.0, facing + 90.0 * heading);
+                    let out = polar(1.0, facing);
+                    let vel = tangent * lerp(180.0, 620.0, self.rand()) * blur.max(0.35) + out * lerp(30.0, 260.0, self.rand()) + vec2(0.0, -lerp(0.0, 120.0, self.rand()));
+                    let life = lerp(0.25, 0.75, self.rand());
+                    self.spark(at, vel, life);
+                }
+            }
+        }
 
         let panel_full = panel_rect(self.side);
         let over_panel = self.panel != Panel::Closed && ptr.is_some_and(|p| panel_full.contains(p));
@@ -834,6 +1095,9 @@ impl App {
 
         // ---- wheel ----
         let (dir, ctrl) = self.wheel_step(ui, now);
+        if self.wheel_acc.abs() >= 1.0 {
+            fx.anim = true; // queued notches still to play out
+        }
         if dir != 0 {
             if let Some(d) = dist {
                 if ctrl {
@@ -849,7 +1113,16 @@ impl App {
                     self.step_selection(dir, now);
                     self.open_list(now, false);
                 } else if d <= R_OUT + 10.0 {
-                    self.spin_genre(dir, now);
+                    // Four quick notches the same way is a flick: let the dial run.
+                    self.spin_streak = if now - self.spin_last < 0.2 && dir == self.spin_dir { self.spin_streak + 1 } else { 1 };
+                    self.spin_last = now;
+                    self.spin_dir = dir;
+                    if self.spin_streak >= 4 {
+                        self.spin_streak = 0;
+                        self.turbo_spin(dir, now);
+                    } else {
+                        self.spin_genre(dir, now);
+                    }
                 }
             }
         }
@@ -936,6 +1209,14 @@ impl App {
         let r_out = lerp(R_PUCK + 3.0 * self.puck_hover, R_OUT, m);
         let r_in = lerp(R_PUCK - 11.0, R_IN, m);
         let label_alpha = ((m - 0.55) / 0.45).clamp(0.0, 1.0);
+        // Part indices for the burst: genres first, then the centre, then the four corner buttons.
+        let burst = self.burst.take();
+        let place = |index: usize, home: Pos2, point: Pos2| -> Pos2 {
+            match (&burst, burst_clock) {
+                (Some(burst), Some(clock)) => burst.place(index, clock, home, point),
+                _ => point,
+            }
+        };
         for i in 0..n {
             let c = hex(&self.cats[i].color);
             let mid = self.rot + i as f32 * step;
@@ -946,19 +1227,32 @@ impl App {
             let outer = r_out + if is_active { 5.0 * m } else { 0.0 };
             let gap = GAP_DEG * m;
             let (from, to) = (mid - step / 2.0 + gap / 2.0, mid + step / 2.0 - gap / 2.0);
-            painter.add(egui::Shape::line(arc_points(C, (r_in + outer) / 2.0, from, to), Stroke::new(outer - r_in, fill)));
+            let home = C + polar((r_in + outer) / 2.0, mid);
+            let moved = |points: Vec<Pos2>| -> Vec<Pos2> { points.into_iter().map(|point| place(i, home, point)).collect() };
+            painter.add(egui::Shape::line(moved(arc_points(C, (r_in + outer) / 2.0, from, to)), Stroke::new(outer - r_in, fill)));
             if !is_active && m > 0.3 {
-                painter.add(egui::Shape::line(arc_points(C, outer - 2.0, from, to), Stroke::new(4.0_f32, fade(c, (m - 0.3) / 0.7))));
+                painter.add(egui::Shape::line(moved(arc_points(C, outer - 2.0, from, to)), Stroke::new(4.0_f32, fade(c, (m - 0.3) / 0.7))));
             }
+            // At speed the labels smear away, which reads as motion blur.
+            let label_alpha = label_alpha * (1.0 - 0.9 * blur);
             if label_alpha > 0.0 {
-                let at = C + polar((r_in + outer) / 2.0, mid);
+                let at = place(i, home, home);
                 let ink = fade(if is_active { DARK } else { SOFT }, label_alpha);
                 painter.text(at - vec2(0.0, 8.0), Align2::CENTER_CENTER, &self.cats[i].icon, font(16.0, false), fade(if is_active { DARK } else { c }, label_alpha));
                 painter.text(at + vec2(0.0, 10.0), Align2::CENTER_CENTER, &self.cats[i].short, font(10.5, true), ink);
             }
         }
 
+        // Speed streaks around the rim while the dial is running.
+        if blur > 0.05 {
+            for k in 0..3 {
+                let from = self.rot * 0.6 + k as f32 * 120.0;
+                painter.add(egui::Shape::line(arc_points(C, R_OUT + 9.0, from, from + 50.0 * blur), Stroke::new(2.0_f32, fade(TEXT, 0.4 * blur))));
+            }
+        }
+
         // ---- core ----
+        let core_at = place(n, C, C);
         let (core_hovered, core_clicked) = if self.mini { (false, false) } else { io.circle(C, R_CORE) };
         if core_clicked {
             if let Some(k) = current {
@@ -966,20 +1260,20 @@ impl App {
             }
         }
         let r_core = lerp(R_PUCK - 12.0, R_CORE, m);
-        painter.circle_filled(C, r_core, if core_hovered { INK2 } else { INK });
-        painter.circle_stroke(C, r_core, Stroke::new(1.0_f32, fade(LINE, label_alpha)));
+        painter.circle_filled(core_at, r_core, if core_hovered { INK2 } else { INK });
+        painter.circle_stroke(core_at, r_core, Stroke::new(1.0_f32, fade(LINE, label_alpha)));
         if m < 0.6 {
-            painter.text(C, Align2::CENTER_CENTER, &self.cats[active].icon, font(14.0, false), fade(col, 1.0 - m / 0.6));
+            painter.text(core_at, Align2::CENTER_CENTER, &self.cats[active].icon, font(14.0, false), fade(col, 1.0 - m / 0.6));
         }
         if label_alpha > 0.0 {
             let order = self.ordered(&self.cats[active].id);
             let position = current.and_then(|k| order.iter().position(|&o| o == k)).map_or(0, |p| p + 1);
             let head = format!("{}  {}/{}", self.cats[active].short, position, order.len());
-            painter.text(C - vec2(0.0, 41.0), Align2::CENTER_CENTER, head, num(12.0), fade(col, label_alpha));
+            painter.text(core_at - vec2(0.0, 41.0), Align2::CENTER_CENTER, head, num(12.0), fade(col, label_alpha));
             let title = current.map_or("プロンプトなし", |k| self.items[k].title.as_str());
             let g = galley(ui, title, display(16.0), fade(TEXT, label_alpha), 138.0, 3, Some(22.0), true);
-            painter.galley(pos2(C.x, C.y - g.size().y / 2.0 + 1.0), g, TEXT);
-            painter.text(C + vec2(0.0, 44.0), Align2::CENTER_CENTER, "クリックでコピー", font(10.0, false), fade(MUTED, label_alpha));
+            painter.galley(pos2(core_at.x, core_at.y - g.size().y / 2.0 + 1.0), g, TEXT);
+            painter.text(core_at + vec2(0.0, 44.0), Align2::CENTER_CENTER, "クリックでコピー", font(10.0, false), fade(MUTED, label_alpha));
         }
         // Countdown sweep: shows that the list is about to open, and when.
         if let Some(started) = self.dwell {
@@ -996,8 +1290,8 @@ impl App {
                 fx.anim = true;
                 let alpha = (t / 0.09).min(1.0) * ((1.15 - t) / 0.25).min(1.0);
                 let tint = if ok { col } else { BAD };
-                painter.circle_filled(C, r_core, fade(tint, alpha));
-                painter.text(C, Align2::CENTER_CENTER, message, display(15.0), fade(DARK, alpha));
+                painter.circle_filled(core_at, r_core, fade(tint, alpha));
+                painter.text(core_at, Align2::CENTER_CENTER, message, display(15.0), fade(DARK, alpha));
                 let wave = ease(t / 0.55);
                 if wave < 1.0 {
                     painter.circle_stroke(C, lerp(R_CORE, R_OUT + 14.0, wave), Stroke::new(lerp(5.0, 1.0, wave), fade(tint, 0.8 * (1.0 - wave))));
@@ -1009,8 +1303,9 @@ impl App {
         if label_alpha > 0.0 {
             let fav_now = current.is_some_and(|k| self.is_fav(k));
             for (index, (dx, dy)) in CORNERS.iter().enumerate() {
-                let at = C + vec2(*dx, *dy);
-                let (hovered, clicked) = if self.mini { (false, false) } else { io.circle(at, 18.0) };
+                let rest = C + vec2(*dx, *dy);
+                let at = place(n + 1 + index, rest, rest);
+                let (hovered, clicked) = if self.mini { (false, false) } else { io.circle(rest, 18.0) };
                 let on = match index {
                     1 => self.panel == Panel::Settings,
                     2 => self.panel == Panel::List && self.locked,
@@ -1056,9 +1351,21 @@ impl App {
             }
         }
 
+        self.burst = burst;
         if self.panel_t > 0.001 {
             self.draw_panel(ui, &painter, &mut io, fx, now, dt, col, panel_full);
         }
+        // The click of everything landing back in place.
+        if let Some(at) = self.snap {
+            let t = (now - at) as f32 / 0.4;
+            if t >= 1.0 {
+                self.snap = None;
+            } else {
+                fx.anim = true;
+                painter.circle_stroke(C, lerp(R_OUT + 2.0, R_OUT + 20.0, ease(t)), Stroke::new(lerp(3.0, 0.5, t), fade(col, 0.7 * (1.0 - t))));
+            }
+        }
+        fx.anim |= self.draw_sparks(&painter, dt);
         if io.hand {
             ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }

@@ -6,6 +6,7 @@ use windows_sys::Win32::Graphics::Gdi::{
     BITMAPINFOHEADER, BLENDFUNCTION, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows_sys::Win32::System::Threading::CreateMutexW;
+use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, GetWindowRect, SetWindowLongPtrW, SetWindowPos, ShowWindow, UpdateLayeredWindow, GWL_EXSTYLE, HWND_NOTOPMOST,
     HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOWNOACTIVATE, ULW_ALPHA, WS_EX_LAYERED,
@@ -48,6 +49,12 @@ pub fn move_resize(hwnd: isize, x: i32, y: i32, w: i32, h: i32) {
 }
 
 
+
+/// Cursor position on the virtual screen.
+pub fn cursor_pos() -> Option<(i32, i32)> {
+    let mut p = POINT { x: 0, y: 0 };
+    (unsafe { GetCursorPos(&mut p) } != 0).then_some((p.x, p.y))
+}
 
 /// Returns false when another copy of the app already holds the named mutex.
 pub fn claim_single_instance(name: &str) -> bool {
