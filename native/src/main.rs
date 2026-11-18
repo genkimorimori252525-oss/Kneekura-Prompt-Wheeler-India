@@ -1143,7 +1143,9 @@ impl App {
             self.side = self.pick_side(&ctx);
         }
         fx.anim |= approach(&mut self.mini_t, if self.mini { 0.0 } else { 1.0 }, dt, 10.0);
-        fx.anim |= approach(&mut self.panel_t, if self.panel == Panel::Closed { 0.0 } else { 1.0 }, dt, 8.5);
+        // Opening unfolds at a readable pace; putting the list away is brisk, about twice as fast.
+        let (panel_goal, panel_speed) = if self.panel == Panel::Closed { (0.0, 19.0) } else { (1.0, 8.5) };
+        fx.anim |= approach(&mut self.panel_t, panel_goal, dt, panel_speed);
         let m = ease(self.mini_t);
         let n = self.cats.len();
         let step = 360.0 / n as f32;
