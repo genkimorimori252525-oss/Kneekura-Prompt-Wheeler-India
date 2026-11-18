@@ -1,12 +1,3 @@
-# Generated frontend bundle (copied from the tracked static source).
-desktop-dist/
-node_modules/
-src-tauri/target/
-src-tauri/gen/schemas/
-*.log
-
-# Icons produced from scripts/generate-icons.mjs
-src-tauri/icons/
-
 # Native app build output
 native/target/
+*.log

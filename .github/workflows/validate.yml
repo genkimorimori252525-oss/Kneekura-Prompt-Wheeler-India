@@ -2,13 +2,11 @@ name: Validate Prompt Catalog
 on:
   push:
     paths:
-      - 'app.js'
       - 'data/**'
       - 'scripts/**'
       - '.github/workflows/validate.yml'
   pull_request:
     paths:
-      - 'app.js'
       - 'data/**'
       - 'scripts/**'
       - '.github/workflows/validate.yml'
@@ -22,9 +20,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --check app.js
-      - run: node --check desktop.js
-      - run: node --check scripts/generate-icons.mjs
-      - run: node scripts/prepare-desktop.mjs
-      - run: node scripts/check-desktop.mjs
       - run: node scripts/validate-catalog.mjs
