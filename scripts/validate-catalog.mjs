@@ -17,7 +17,7 @@ for (const item of catalog.prompts) {
   assert.ok(!ids.has(item.id), "duplicate prompt ID: " + item.id);
   ids.add(item.id);
   assert.ok(categoryIds.has(item.category), "unknown category: " + item.id);
-  for (const key of ["title", "summary", "prompt"]) {
+  for (const key of ["title", "summary", "prompt", "sub"]) {
     assert.ok(typeof item[key] === "string" && item[key].trim(), item.id + " missing " + key);
   }
   assert.ok(item.source && ["user-supplied", "adapted", "original"].includes(item.source.type), "invalid origin: " + item.id);

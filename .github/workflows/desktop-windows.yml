@@ -5,7 +5,7 @@ on:
     paths:
       - "src-tauri/**"
       - "desktop.js"
-      - "desktop.css"
+      - "styles.css"
       - "app.js"
       - "index.html"
       - "data/**"

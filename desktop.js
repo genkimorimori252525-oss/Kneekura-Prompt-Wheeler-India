@@ -1,143 +1,112 @@
 "use strict";
+// Native bridge for the Tauri overlay window. In a plain browser this only tags <html class="web">.
 (() => {
-  // Browser/PWA mode intentionally remains standalone and has no native API dependency.
-  const native = window.__TAURI__;
-  if (!native?.window?.getCurrentWindow || !native?.dpi?.LogicalSize) return;
+  const tauri = window.__TAURI__;
+  const api = tauri?.window, dpi = tauri?.dpi;
+  if (!api?.getCurrentWindow || !dpi?.PhysicalSize || !dpi?.PhysicalPosition) {
+    document.documentElement.classList.add("web");
+    return;
+  }
+  document.documentElement.classList.add("desktop");
 
-  const appWindow = native.window.getCurrentWindow();
-  const LogicalSize = native.dpi.LogicalSize;
-  const PREF_KEY = "kneekura.prompt-wheel.desktop.v1";
-  const defaults = {
-    compact: true,
-    pinned: true,
-    sizes: {
-      compact: { width: 430, height: 675 },
-      expanded: { width: 1020, height: 760 }
-    }
-  };
-  const $ = (id) => document.getElementById(id);
-  const safeSize = (value, fallback) => {
-    if (!value || typeof value !== "object") return { ...fallback };
-    const width = Number(value.width), height = Number(value.height);
-    if (!Number.isFinite(width) || !Number.isFinite(height)) return { ...fallback };
-    return {
-      width: Math.min(1900, Math.max(360, Math.round(width))),
-      height: Math.min(1300, Math.max(460, Math.round(height)))
-    };
-  };
+  const win = api.getCurrentWindow();
+  const PREF_KEY = "kneekura.prompt-wheel.desktop.v2";
+  // Logical sizes at 100% scale; must match styles.css.
+  const SIZES = { mini: [60, 60], ring: [320, 320], drawer: [320, 610] };
 
   function readPrefs() {
     try {
-      const saved = JSON.parse(localStorage.getItem(PREF_KEY) || "{}");
-      return {
-        compact: saved.compact === undefined ? defaults.compact : saved.compact === true,
-        pinned: saved.pinned === undefined ? defaults.pinned : saved.pinned === true,
-        sizes: {
-          compact: safeSize(saved.sizes?.compact, defaults.sizes.compact),
-          expanded: safeSize(saved.sizes?.expanded, defaults.sizes.expanded)
-        }
-      };
-    } catch (_) {
-      return structuredClone(defaults);
-    }
+      const saved = JSON.parse(localStorage.getItem(PREF_KEY) || "{}") || {};
+      const pos = saved.pos && Number.isFinite(saved.pos.x) && Number.isFinite(saved.pos.y) ? { x: saved.pos.x, y: saved.pos.y } : null;
+      return { pinned: saved.pinned !== false, pos };
+    } catch (_) { return { pinned: true, pos: null }; }
   }
-
   const prefs = readPrefs();
-  let muteResizeUntil = 0;
-  let resizeTimer;
-  let updating = false;
   const persist = () => {
-    try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
-    catch (_) { /* Unavailable storage should not block native controls. */ }
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (_) { /* keep working without storage */ }
   };
-  function render() {
-    document.body.classList.add("desktop-mode");
-    document.body.classList.toggle("compact-mode", prefs.compact);
-    $("pinToggle").textContent = prefs.pinned ? "● 固定中" : "○ 固定OFF";
-    $("pinToggle").setAttribute("aria-pressed", String(prefs.pinned));
-    $("pinToggle").title = prefs.pinned ? "最前面固定を解除" : "常に最前面に固定";
-    $("modeToggle").textContent = prefs.compact ? "▣ 一覧" : "◉ 小型";
-    $("modeToggle").title = prefs.compact ? "プロンプトの一覧を広げる" : "小型ホイールに戻す";
-    $("hideWindow").title = "タスクトレイに隠す";
-    $("desktopControls").hidden = false;
+
+  async function workArea() {
+    const monitor = (await api.currentMonitor()) || (await api.primaryMonitor());
+    if (!monitor) return null;
+    const area = monitor.workArea || monitor;
+    return { x: area.position.x, y: area.position.y, w: area.size.width, h: area.size.height };
   }
 
-  async function resizeToMode() {
-    const size = prefs.sizes[prefs.compact ? "compact" : "expanded"];
-    // DOM resize events emitted by setSize must not overwrite the user's saved size.
-    muteResizeUntil = Date.now() + 1100;
-    await appWindow.setSize(new LogicalSize(size.width, size.height));
-  }
-
-  async function togglePin() {
-    if (updating) return;
-    updating = true;
-    const next = !prefs.pinned;
-    try {
-      await appWindow.setAlwaysOnTop(next);
-      prefs.pinned = next;
-      persist(); render();
-    } catch (error) {
-      console.warn("Unable to change always-on-top:", error);
-      window.alert("最前面表示の切り替えに失敗しました。");
-    } finally { updating = false; }
-  }
-
-  async function toggleMode() {
-    if (updating) return;
-    updating = true;
-    const previous = prefs.compact;
-    prefs.compact = !previous;
-    render();
-    try {
-      await resizeToMode();
-      persist();
-    } catch (error) {
-      prefs.compact = previous;
-      render();
-      console.warn("Unable to resize:", error);
-      window.alert("表示サイズの切り替えに失敗しました。");
-    } finally { updating = false; }
-  }
-
-  // Searching from the tiny widget first expands the list; never focus a hidden input.
-  document.addEventListener("keydown", async (event) => {
-    if (prefs.compact && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      await toggleMode();
-      if (!prefs.compact) $("searchInput").focus();
+  // Resize for a view while pinning the window corner nearest to a screen corner,
+  // so a widget parked bottom-right grows up/left instead of off-screen.
+  async function layout(view, zoom = 1) {
+    const [logicalW, logicalH] = SIZES[view] || SIZES.ring;
+    const scale = (await win.scaleFactor()) * zoom;
+    const pos = await win.outerPosition(), size = await win.outerSize();
+    const area = await workArea();
+    const w = Math.round(logicalW * scale), h = Math.round(logicalH * scale);
+    let right = false, bottom = false, x = pos.x, y = pos.y;
+    if (area) {
+      right = pos.x + size.width / 2 > area.x + area.w / 2;
+      bottom = pos.y + size.height / 2 > area.y + area.h / 2;
     }
-  }, { capture: true });
-  $("pinToggle").addEventListener("click", togglePin);
-  $("modeToggle").addEventListener("click", toggleMode);
-  $("hideWindow").addEventListener("click", async () => {
-    try { await appWindow.hide(); }
-    catch (error) { console.warn("Unable to hide:", error); }
+    if (right) x = pos.x + size.width - w;
+    if (bottom) y = pos.y + size.height - h;
+    if (area) {
+      x = Math.min(Math.max(x, area.x), area.x + area.w - w);
+      y = Math.min(Math.max(y, area.y), area.y + area.h - h);
+    }
+    await win.setSize(new dpi.PhysicalSize(w, h));
+    await win.setPosition(new dpi.PhysicalPosition(Math.round(x), Math.round(y)));
+    return { right, bottom };
+  }
+
+  let moveTimer, lastMoved = 0;
+  void win.onMoved(({ payload }) => {
+    lastMoved = Date.now();
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => { prefs.pos = { x: payload.x, y: payload.y }; persist(); }, 400);
   });
 
-  // Window size changes through the normal OS border are remembered per mode.
-  window.addEventListener("resize", () => {
-    if (Date.now() < muteResizeUntil || updating) return;
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      if (Date.now() < muteResizeUntil) return;
-      const mode = prefs.compact ? "compact" : "expanded";
-      prefs.sizes[mode] = safeSize(
-        { width: window.innerWidth, height: window.innerHeight },
-        prefs.sizes[mode]
-      );
-      persist();
-    }, 350);
+  // Frameless window: drag it from anywhere that is not a text field or the scrolling list.
+  // A press that does not travel stays an ordinary click.
+  let pressed = null;
+  document.addEventListener("mousedown", (event) => {
+    pressed = event.button === 0 && !event.target.closest("input, textarea, select, .list") ? { x: event.screenX, y: event.screenY } : null;
   });
+  document.addEventListener("mousemove", (event) => {
+    if (!pressed) return;
+    if (!(event.buttons & 1)) { pressed = null; return; }
+    if (Math.hypot(event.screenX - pressed.x, event.screenY - pressed.y) > 5) {
+      pressed = null;
+      lastMoved = Date.now();
+      void win.startDragging();
+    }
+  });
+  // If the webview still reports a click at the end of a drag, drop it.
+  document.addEventListener("click", (event) => {
+    if (Date.now() - lastMoved < 250) { event.stopPropagation(); event.preventDefault(); }
+  }, true);
 
-  // Native close -> tray is implemented on the Rust side. The tray's exit menu
-  // actually terminates the application, preventing the hide/exit ambiguity.
-  render();
-  void (async () => {
-    try {
-      await appWindow.setAlwaysOnTop(prefs.pinned);
-      await resizeToMode();
-    } catch (error) { console.warn("Unable to restore desktop preferences:", error); }
-  })();
+  window.PWHost = {
+    get pinned() { return prefs.pinned; },
+    layout,
+    async togglePin() {
+      const next = !prefs.pinned;
+      try {
+        await win.setAlwaysOnTop(next);
+        prefs.pinned = next;
+        persist();
+      } catch (error) { console.warn("always-on-top change failed:", error); }
+      return prefs.pinned;
+    },
+    // Called once at startup. The window is created hidden, so it never flashes at the wrong size.
+    async ready(view, zoom) {
+      let anchor = { right: false, bottom: false };
+      try {
+        await win.setAlwaysOnTop(prefs.pinned);
+        if (prefs.pos) await win.setPosition(new dpi.PhysicalPosition(prefs.pos.x, prefs.pos.y));
+        anchor = await layout(view, zoom);
+      } finally {
+        await win.show();
+      }
+      return anchor;
+    }
+  };
 })();

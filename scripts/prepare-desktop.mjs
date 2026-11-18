@@ -9,7 +9,6 @@ const allowedFiles = [
   "index.html",
   "styles.css",
   "app.js",
-  "desktop.css",
   "desktop.js",
   "data/prompts.json"
 ];

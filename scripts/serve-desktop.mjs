@@ -13,7 +13,7 @@ const types = {
 };
 const allowed = new Set([
   "/", "/index.html", "/styles.css", "/app.js",
-  "/desktop.css", "/desktop.js", "/data/prompts.json"
+  "/desktop.js", "/data/prompts.json"
 ]);
 
 createServer(async (request, response) => {

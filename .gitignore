@@ -7,3 +7,6 @@ src-tauri/gen/schemas/
 
 # Icons produced from scripts/generate-icons.mjs
 src-tauri/icons/
+
+# Native app build output
+native/target/

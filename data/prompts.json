@@ -8,7 +8,7 @@
       "label": "開発・AIエージェント",
       "short": "開発",
       "icon": "⌘",
-      "color": "#8395ff",
+      "color": "#6f97ea",
       "desc": "コード、設計、デバッグ、品質"
     },
     {
@@ -16,7 +16,7 @@
       "label": "調査・検証",
       "short": "調査",
       "icon": "⌕",
-      "color": "#58d8bf",
+      "color": "#5cc39a",
       "desc": "調べる、比較する、確かめる"
     },
     {
@@ -24,7 +24,7 @@
       "label": "学習・試験",
       "short": "学習",
       "icon": "✎",
-      "color": "#ffbb73",
+      "color": "#f0b441",
       "desc": "理解、記憶、試験対策"
     },
     {
@@ -32,7 +32,7 @@
       "label": "文章・論理",
       "short": "文章",
       "icon": "¶",
-      "color": "#ee8bbd",
+      "color": "#ee819f",
       "desc": "論証、編集、校正"
     },
     {
@@ -40,15 +40,15 @@
       "label": "創作・脚本",
       "short": "創作",
       "icon": "✦",
-      "color": "#baa7fb",
+      "color": "#ab8ee2",
       "desc": "物語、世界観、アイデア"
     },
     {
       "id": "design",
       "label": "デザイン・UI",
-      "short": "設計",
+      "short": "デザイン",
       "icon": "◈",
-      "color": "#6ec9f7",
+      "color": "#3bb7c9",
       "desc": "使いやすさと見た目"
     },
     {
@@ -56,7 +56,7 @@
       "label": "仕事・計画",
       "short": "仕事",
       "icon": "▣",
-      "color": "#f4a796",
+      "color": "#ee8b4e",
       "desc": "進行管理、判断、整理"
     },
     {
@@ -64,7 +64,7 @@
       "label": "生活・整理",
       "short": "生活",
       "icon": "☼",
-      "color": "#b1d87e",
+      "color": "#a9cc55",
       "desc": "予定、持ち物、決断"
     }
   ],
@@ -73,6 +73,7 @@
       "id": "vox-state",
       "title": "状態機械の発見",
       "category": "coding",
+      "sub": "設計・分析",
       "summary": "暗黙の状態遷移を見つける",
       "prompt": "アプリ内の暗黙の状態機械をすべて探してください。既存動作を壊さず、ユーザー体験（UX）、開発者体験（DX）、AIエージェント体験（AX）を同時に改善する最善の方針を選んでください。",
       "promptEn": "Find all of the implicit state machines in my app. Make the best decision that will elevate all three: the user experience (UX), developer experience (DX), and agent experience (AX) always, without breaking anything.",
@@ -86,6 +87,7 @@
       "id": "vox-oss",
       "title": "OSS探索員",
       "category": "coding",
+      "sub": "着手前の準備",
       "summary": "自作前にGitHubを比較",
       "prompt": "なじみのない機能を最初から実装しないでください。GitHubで関連するオープンソースを探し、手法を比較し、その後で実装に着手してください。",
       "promptEn": "Don't write an unfamiliar feature from scratch. Search GitHub for open-source projects, compare their approaches, then start.",
@@ -99,6 +101,7 @@
       "id": "vox-bug",
       "title": "バグの優先順位",
       "category": "coding",
+      "sub": "デバッグ",
       "summary": "頻度×深刻度で整理",
       "prompt": "各バグについて発生頻度と影響の大きさをそれぞれ1〜10で採点してください。積が5未満なら原則Issueに記録してコードは変更しないでください。誰も要求していない希少・未来のケースのために設計を増やさず、閾値5はプロジェクトに合わせて調整してください。",
       "promptEn": "Rate each bug from 1 to 10 on how often it would happen and how bad it would be. If the two scores multiplied are below 5, just file it as an issue and leave the code alone. Do not design for rare or future cases nobody asked about.\n\nTune the threshold of 5 to your project.",
@@ -113,6 +116,7 @@
       "id": "vox-closer",
       "title": "仕事を完了する",
       "category": "coding",
+      "sub": "仕上げ・運用",
       "summary": "継続提案で止まらない",
       "prompt": "止まる前に仕事全体を終えてください。『続けましょうか』と提案する代わりに続行してください。何かを削除する前には必ず私に確認してください。最後に、作業を見ていない人にも伝わるよう重要点を先に平易な言葉で要約してください。",
       "promptEn": "Finish the whole job before you stop. Don't offer to continue: continue. Ask me before you delete anything. End with a recap for someone who saw none of the work: key points first, plain words.",
@@ -126,6 +130,7 @@
       "id": "vox-ci",
       "title": "CI時間の監査",
       "category": "coding",
+      "sub": "仕上げ・運用",
       "summary": "ジョブの遅さを分解",
       "prompt": "ghで直近150回のCI実行を取得し、各ジョブの時間をマシン待機、準備（checkout・依存関係・キャッシュ復元）、実タスク実行に分けてください。遅い5ジョブの各工程の秒数を報告してください。まずレポートだけ。何も変更しないでください。",
       "promptEn": "Audit this repo's CI: Use gh to pull the last 150 CI runs and split each job's time into three parts: waiting in the queue for a machine, setup (checkout, installing dependencies, restoring the cache), and actually running the task. List the 5 slowest jobs and how many seconds each part takes. Give me the report first. Don't change anything.",
@@ -140,6 +145,7 @@
       "id": "vox-rebuild",
       "title": "ゼロからの再構築",
       "category": "coding",
+      "sub": "設計・分析",
       "summary": "残すべきものを見極める",
       "prompt": "もし今日、同じ目標を掲げてゼロからやり直すとしたら、既存の何をなお残す必要がありますか。理由を示してください。",
       "promptEn": "If you were starting over today with the same goal, what would you still need to keep?",
@@ -153,6 +159,7 @@
       "id": "dev-steps",
       "title": "完了条件つき工程表",
       "category": "coding",
+      "sub": "着手前の準備",
       "summary": "中断・再開できる小分け計画",
       "prompt": "【目標】を小さな順序付きの作業へ分解してください。各工程に完了確認を付け、チェック欄のある単一の記録にしてください。停滞した工程を後から細分化できるようIDを付けてください。",
       "source": {
@@ -165,6 +172,7 @@
       "id": "dev-critic",
       "title": "別視点で設計批評",
       "category": "coding",
+      "sub": "設計・分析",
       "summary": "自己肯定を避けてレビュー",
       "prompt": "【設計・計画】を独立したレビュアーの立場で検討してください。前提ミス、見落とし、競合案、壊れる条件を優先し、根拠のない否定も避けてください。",
       "source": {
@@ -177,6 +185,7 @@
       "id": "dev-ready",
       "title": "リリース前監査",
       "category": "coding",
+      "sub": "仕上げ・運用",
       "summary": "差分とテストの証拠を確認",
       "prompt": "git status、git diff、未追跡ファイルを調べ、変更対象外のファイルを触っていないかを確認してください。必要なテストを実行し、実行済みと未実行を分けて報告してください。",
       "source": {
@@ -189,6 +198,7 @@
       "id": "dev-cause",
       "title": "根本原因から直す",
       "category": "coding",
+      "sub": "デバッグ",
       "summary": "まず識別力の高い検証を",
       "prompt": "【不具合とログ】について再現条件・原因仮説・反証を整理し、もっとも識別力の高い次のテストを1つ提案してください。原因を断定してコードを書き換える前に根拠を示してください。",
       "source": {
@@ -201,6 +211,7 @@
       "id": "dev-impact",
       "title": "変更影響の地図",
       "category": "coding",
+      "sub": "設計・分析",
       "summary": "依存関係と互換性を確認",
       "prompt": "【変更案】が関連モジュール、外部インターフェース、保存データ、テストへ与える影響を点検してください。選択肢と代償を比較し、分析だけを先に報告してください。",
       "source": {
@@ -213,6 +224,7 @@
       "id": "dev-regression",
       "title": "回帰テストの設計",
       "category": "coding",
+      "sub": "デバッグ",
       "summary": "既存動作の破壊を防ぐ",
       "prompt": "【変更対象】について正常・異常・境界値・過去の回帰ケースを列挙し、入力と期待結果の表を作成してください。実行済みの確認と計画上の確認を区別してください。",
       "source": {
@@ -225,6 +237,7 @@
       "id": "research-citations",
       "title": "引用の厳格監査",
       "category": "research",
+      "sub": "情報源",
       "summary": "主張と原典の対応を検証",
       "prompt": "【文章】の事実主張ごとに出典を開き、出典が実際に支持する範囲を確認してください。直接述べられた内容、推測、読み違い、反証、より新しい訂正を区別してください。読めない原典は未確認と報告してください。",
       "source": {
@@ -237,6 +250,7 @@
       "id": "research-primary",
       "title": "一次情報から調べる",
       "category": "research",
+      "sub": "情報源",
       "summary": "公式資料を優先",
       "prompt": "【テーマ】について一次資料を優先して調査し、数値・日付・定義ごとにリンクを示してください。二次情報しかない点、確認できない点、確認時点を明記してください。",
       "source": {
@@ -249,6 +263,7 @@
       "id": "research-compare",
       "title": "候補を同じ軸で比較",
       "category": "research",
+      "sub": "比較・検証",
       "summary": "得失を公平に整理",
       "prompt": "【選択肢】を【目的】に照らし、共通の評価軸で比較してください。事実と推測を分け、何を重視すれば結論が逆転するかも示してください。",
       "source": {
@@ -261,6 +276,7 @@
       "id": "research-rebuttal",
       "title": "最強の反証を探す",
       "category": "research",
+      "sub": "比較・検証",
       "summary": "仮説に有利な事実だけ見ない",
       "prompt": "【仮説】を正確に要約したうえで、それを否定しうる強い証拠・具体例・境界条件を探してください。反証できないことを証明とは扱わず、残る不確実性を示してください。",
       "source": {
@@ -273,6 +289,7 @@
       "id": "research-map",
       "title": "証拠マップ",
       "category": "research",
+      "sub": "比較・検証",
       "summary": "事実と解釈を分ける",
       "prompt": "【問い】について各情報を事実・解釈・予測に分類し、出典と日付を付けてください。資料が一致する点、対立する点、未調査の点を表にしてください。",
       "source": {
@@ -285,6 +302,7 @@
       "id": "study-tutor",
       "title": "一概念ずつ教える",
       "category": "study",
+      "sub": "理解する",
       "summary": "理解確認しながら進む",
       "prompt": "【科目】を【理解度】の人に教えてください。概念を一つだけ具体例つきで説明し、短い確認問題を出して私の回答を待ってください。誤答なら別の説明に変えてください。",
       "source": {
@@ -297,6 +315,7 @@
       "id": "study-quiz",
       "title": "想起型クイズ",
       "category": "study",
+      "sub": "記憶・試験",
       "summary": "暗記の定着を確かめる",
       "prompt": "【資料】の内容だけから、重要知識を思い出して答える問題を作ってください。1問ずつ出題し、解答後に根拠と不足点を示してください。資料外の知識は混ぜないでください。",
       "source": {
@@ -309,6 +328,7 @@
       "id": "study-feynman",
       "title": "フェインマン理解法",
       "category": "study",
+      "sub": "理解する",
       "summary": "自分の言葉で説明する",
       "prompt": "【テーマ】の重要概念を5つ、簡単な説明と理解確認の問いで示してください。次に私に説明させ、理解の穴を探し、身近なたとえと応用問題で確認してください。",
       "source": {
@@ -321,6 +341,7 @@
       "id": "study-exam",
       "title": "試験の重点整理",
       "category": "study",
+      "sub": "記憶・試験",
       "summary": "範囲に沿った想定問題",
       "prompt": "【試験範囲と教材】を根拠に、重要論点、想定問題10問、簡潔な模範解答を作成してください。出題を知っているように断定せず、資料外の補足は区別してください。",
       "source": {
@@ -333,6 +354,7 @@
       "id": "study-analogy",
       "title": "たとえの限界まで説明",
       "category": "study",
+      "sub": "理解する",
       "summary": "誤解なく理解する",
       "prompt": "【難しい概念】を【身近なもの】にたとえ、次に正確な説明をしてください。その比喩が成り立たない箇所を明示し、最後に確認の質問を一つ出してください。",
       "source": {
@@ -345,6 +367,7 @@
       "id": "study-lecture",
       "title": "資料準拠の講義整理",
       "category": "study",
+      "sub": "記憶・試験",
       "summary": "教授の用語を保持",
       "prompt": "【講義資料と文字起こし】を比較し、資料に沿って重要事項をわかりやすく説明してください。教授独自の追加情報と重複説明を分け、資料にないことを勝手に補わないでください。",
       "source": {
@@ -357,6 +380,7 @@
       "id": "write-clarify",
       "title": "意味を維持して明瞭化",
       "category": "writing",
+      "sub": "推敲",
       "summary": "主張と語り口を保つ",
       "prompt": "【文章】を私の文体と論旨を維持したまま明瞭にしてください。主張を不必要に弱めず、読みづらさだけを直し、完成稿を先に示してください。",
       "source": {
@@ -369,6 +393,7 @@
       "id": "write-flow",
       "title": "論理の流れを修正",
       "category": "writing",
+      "sub": "論理",
       "summary": "段落の飛躍を検出",
       "prompt": "【文章】の段落同士のつながり、暗黙の前提、結論までの道筋を点検してください。論旨を変えず、飛躍を埋める最小限の修正を提案してください。",
       "source": {
@@ -381,6 +406,7 @@
       "id": "write-short",
       "title": "本筋を残して短く",
       "category": "writing",
+      "sub": "推敲",
       "summary": "留保の増やしすぎを防ぐ",
       "prompt": "【文章】の重複、不要な前置き、過剰な例外説明を削ってください。主張・根拠・説得力は残し、短さを目的化しないでください。",
       "source": {
@@ -393,6 +419,7 @@
       "id": "write-brief",
       "title": "文体ブリーフ",
       "category": "writing",
+      "sub": "文体",
       "summary": "用途とNG表現を指定",
       "prompt": "【原稿】を【想定読者】へ【目的】で届けます。維持する文体は【文体】、伝える結論は【結論】、避ける表現は【NG例】です。意味を付け足さず完成稿を提示してください。",
       "source": {
@@ -405,6 +432,7 @@
       "id": "write-natural",
       "title": "自然な日本語に直す",
       "category": "writing",
+      "sub": "推敲",
       "summary": "誇張や空疎な表現を削る",
       "prompt": "【文章】を自然で具体的な日本語にしてください。決まりきったAI的な前置き、過大な宣伝表現、同じ形の箇条書きを避け、事実関係を保持してください。",
       "source": {
@@ -417,6 +445,7 @@
       "id": "write-core",
       "title": "論旨を太く評価",
       "category": "writing",
+      "sub": "論理",
       "summary": "揚げ足より全体の説得力",
       "prompt": "【主張】の中心と根拠をまず捉え、議論全体が説得的かを評価してください。結論に影響しない細かな言葉尻や例外は主題にせず、核を強める具体案を優先してください。",
       "source": {
@@ -429,6 +458,7 @@
       "id": "create-branches",
       "title": "物語の分岐設計",
       "category": "creative",
+      "sub": "構成",
       "summary": "人物の動機から展開を作る",
       "prompt": "【あらすじ】に対して人物の動機を壊さない分岐を5案示してください。各案に引き金、決断、代償、後の伏線を付けてください。",
       "source": {
@@ -441,6 +471,7 @@
       "id": "create-consistency",
       "title": "物語の整合性監査",
       "category": "creative",
+      "sub": "点検・演出",
       "summary": "時系列と人物の知識を検査",
       "prompt": "【脚本と設定資料】を照合し、時系列、人物ごとの知識、場所、能力の制約、台詞の口調に矛盾がないか確認してください。意図的な謎は勝手に解決しないでください。",
       "source": {
@@ -453,6 +484,7 @@
       "id": "create-world",
       "title": "世界観の骨格",
       "category": "creative",
+      "sub": "構成",
       "summary": "制度と日常から物語を生む",
       "prompt": "【アイデア】を核に、社会ルール、資源、制約、日常、制度が生む対立を関連づけて設定し、設定が実際に活きる事件を3つ考えてください。",
       "source": {
@@ -465,6 +497,7 @@
       "id": "create-scene",
       "title": "説明台詞なしの演出",
       "category": "creative",
+      "sub": "点検・演出",
       "summary": "動作と沈黙で伝える",
       "prompt": "【出来事・感情】を説明台詞に頼らず、視線・行動・沈黙・小道具で観客へ伝える場面を3案示してください。",
       "source": {
@@ -477,6 +510,7 @@
       "id": "design-critique",
       "title": "UIの使用感を批評",
       "category": "design",
+      "sub": "批評",
       "summary": "見た目と操作の両面を見る",
       "prompt": "【UI】を利用者の目的からレビューしてください。視線の流れ、操作を理解できるか、失敗時の表示、スマホとキーボード対応を点検し、重要度順に改善を提案してください。",
       "source": {
@@ -489,6 +523,7 @@
       "id": "design-requirements",
       "title": "抽象要求を仕様へ",
       "category": "design",
+      "sub": "仕様化",
       "summary": "測れる判定条件に変換",
       "prompt": "【デザイン要求】にある『わかりやすい』『高級感』『使いやすい』を、文字、余白、対比、操作順、各画面幅、動作条件などの確認可能な条件へ変換してください。",
       "source": {
@@ -501,6 +536,7 @@
       "id": "design-wheel",
       "title": "ドーナツUI仕様",
       "category": "design",
+      "sub": "仕様化",
       "summary": "ホイール右回転でジャンル選択",
       "prompt": "用途別のプロンプトをドーナツ型に配置してください。マウスホイール下で右回転して次のジャンルへ移り、現在位置を示し、ワンクリックで本文をコピーできるようにしてください。キーボードとタッチ操作も同等に使えるようにしてください。",
       "source": {
@@ -513,6 +549,7 @@
       "id": "design-access",
       "title": "アクセシビリティ監査",
       "category": "design",
+      "sub": "批評",
       "summary": "色以外の手がかりを加える",
       "prompt": "【UI】についてキーボード操作、フォーカス表示、スクリーンリーダーの名前、色以外の状態表示、動きの軽減対応を点検してください。実際に検証できたことだけを合格扱いにしてください。",
       "source": {
@@ -525,6 +562,7 @@
       "id": "work-memo",
       "title": "意思決定メモ",
       "category": "work",
+      "sub": "判断",
       "summary": "結論を先に示す",
       "prompt": "【状況】を、結論、主要根拠、選択肢と代償、未決事項、次の行動へ整理してください。経緯を知らない人にも読める順番で短く示してください。",
       "source": {
@@ -537,6 +575,7 @@
       "id": "work-risk",
       "title": "リスク台帳",
       "category": "work",
+      "sub": "判断",
       "summary": "重大リスクを埋もれさせない",
       "prompt": "【計画】に対するリスクを発生可能性・影響・検出方法・予防・発生時対応で表にしてください。低頻度でも致命的な事象は別途強調してください。",
       "source": {
@@ -549,6 +588,7 @@
       "id": "work-notes",
       "title": "会議・講義メモ整理",
       "category": "work",
+      "sub": "整理・再開",
       "summary": "発言と合意を混同しない",
       "prompt": "【文字起こし】を、決定事項、提案、未決事項、担当者、期限、次回確認に分類してください。誰も明言していない合意を創作しないでください。",
       "source": {
@@ -561,6 +601,7 @@
       "id": "work-resume",
       "title": "止まった作業を再開",
       "category": "work",
+      "sub": "整理・再開",
       "summary": "次の小さな一手を決める",
       "prompt": "【停滞中の作業】の現在地、詰まった原因、外部待ち条件を整理し、目標を維持したうえで次に実行可能な作業を一つ示してください。",
       "source": {
@@ -573,6 +614,7 @@
       "id": "life-packing",
       "title": "忘れ物防止リスト",
       "category": "life",
+      "sub": "準備・計画",
       "summary": "出発前に短く確認",
       "prompt": "【目的地と予定】に必要なものを、前夜に準備・出発直前確認・忘れると困るものに分類して短いチェックリストを作ってください。",
       "source": {
@@ -585,6 +627,7 @@
       "id": "life-plan",
       "title": "余白のある一日計画",
       "category": "life",
+      "sub": "準備・計画",
       "summary": "移動・遅延・休息を織り込む",
       "prompt": "【今日の予定】の固定時刻を優先し、移動、準備、遅延、休憩の余白を入れて計画してください。実現が難しい早起きや詰め込みを前提にしないでください。",
       "source": {
@@ -597,6 +640,7 @@
       "id": "life-decision",
       "title": "選択肢の整理",
       "category": "life",
+      "sub": "決断・習慣",
       "summary": "優先度から判断",
       "prompt": "【選択肢】を【私の優先条件】で比べ、長所・短所・取り返しのつかなさ・後から変えられる点を分けて示してください。不明な事実は不明と伝えてください。",
       "source": {
@@ -609,6 +653,7 @@
       "id": "life-small",
       "title": "小さく継続する",
       "category": "life",
+      "sub": "決断・習慣",
       "summary": "再開しやすい単位に分割",
       "prompt": "【目標】を小さな完了条件のある工程に分け、各工程へ再開用の一行メモを付けてください。疲れた日にできる最小版も考えてください。",
       "source": {

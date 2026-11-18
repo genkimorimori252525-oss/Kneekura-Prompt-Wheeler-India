@@ -9,19 +9,21 @@ const conf = JSON.parse(read("src-tauri/tauri.conf.json"));
 const caps = JSON.parse(read("src-tauri/capabilities/default.json"));
 assert.ok(conf.build.frontendDist === "../desktop-dist");
 assert.ok(conf.app.withGlobalTauri);
-assert.ok(conf.app.windows[0].resizable);
+assert.ok(conf.app.windows[0].transparent && conf.app.windows[0].decorations === false);
+assert.ok(conf.app.windows[0].visible === false, "window starts hidden; desktop.js shows it once placed");
 assert.ok(conf.app.windows[0].alwaysOnTop);
 assert.ok(caps.permissions.includes("core:window:allow-set-size"));
 assert.ok(caps.permissions.includes("core:window:allow-set-always-on-top"));
-assert.ok(caps.permissions.includes("core:window:allow-hide"));
-const required = ["index.html","styles.css","app.js","desktop.js","desktop.css","data/prompts.json"];
+for (const p of ["set-position", "start-dragging", "show", "hide"]) assert.ok(caps.permissions.includes("core:window:allow-" + p), "missing permission " + p);
+const required = ["index.html","styles.css","app.js","desktop.js","data/prompts.json"];
 for (const path of required) {
   const output = "desktop-dist/" + path;
   assert.ok(statSync(resolve(root, output)).size > 0, "Missing " + output);
 }
 const html = read("desktop-dist/index.html").toString("utf-8");
 assert.match(html, /desktop\.js/);
-assert.match(html, /quickCopy/);
+assert.match(html, /id="puck"/);
+assert.match(html, /id="core"/);
 const png = read("src-tauri/icons/icon.png");
 assert.equal(png.subarray(0,8).toString("hex"), "89504e470d0a1a0a");
 const ico = read("src-tauri/icons/icon.ico");

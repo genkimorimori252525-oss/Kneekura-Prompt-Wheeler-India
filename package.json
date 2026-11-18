@@ -1,7 +1,7 @@
 {
   "name": "kneekura-prompt-wheeler",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lightweight Tauri desktop prompt wheel with an independent static web version",
   "scripts": {
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
