@@ -102,6 +102,9 @@ pub struct Saved {
     pub mini: bool,
     #[serde(default = "default_true")]
     pub pinned: bool,
+    /// Playful effects: sparks on a hard spin, parts falling when shaken, the ten-click burst.
+    #[serde(default = "default_true")]
+    pub play: bool,
     /// Window layout the saved position refers to; lets a newer build migrate it.
     #[serde(default)]
     pub layout: u32,
@@ -118,6 +121,7 @@ impl Default for Saved {
             pos: None,
             mini: false,
             pinned: true,
+            play: true,
             layout: 2,
         }
     }

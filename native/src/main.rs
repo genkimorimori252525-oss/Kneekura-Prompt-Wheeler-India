@@ -49,7 +49,7 @@ const MUTED: Color32 = Color32::from_rgb(150, 140, 122);
 const LINE: Color32 = Color32::from_rgb(64, 58, 49);
 const GOLD: Color32 = Color32::from_rgb(236, 186, 72);
 const BAD: Color32 = Color32::from_rgb(234, 124, 98);
-const SETTINGS_H: f32 = 330.0;
+const SETTINGS_H: f32 = 362.0;
 
 const REQ_SHOW: u8 = 1;
 const REQ_QUIT: u8 = 2;
@@ -248,7 +248,9 @@ struct Spark {
     life: f32,
 }
 
-/// Where one part of the wheel flies to when the wheel is shaken apart.
+/// How one part of the wheel moves when the wheel comes apart.
+/// Explode: `off` is where it is flung, `curl` bends the path, `spin` tumbles it.
+/// Fall: `off.x` is sideways drift, `off.y` the drop to where it lands, `spin` its resting tilt.
 struct Shard {
     off: Vec2,
     curl: f32,
@@ -256,44 +258,78 @@ struct Shard {
     delay: f32,
 }
 
-/// Shaking the wheel throws every part out along a random path, holds, then runs the very same
-/// motion backwards. Because each part's place is a pure function of one clock, the return is an
-/// exact reverse playback rather than a second animation.
+#[derive(Clone, Copy, PartialEq)]
+enum BurstKind {
+    /// Ten quick clicks: everything is flung outwards.
+    Explode,
+    /// Shaking: parts rattle loose one by one and drop, like things off a shelf.
+    Fall,
+}
+
+/// The wheel coming apart and then putting itself back. Each part's place is a pure function of
+/// one clock that runs forward, holds, and then runs backward, so the return is an exact reverse
+/// playback of the way out rather than a second animation.
 struct Burst {
     start: f64,
+    kind: BurstKind,
+    /// Length of the outward motion; the clock never goes past it.
+    span: f32,
+    back: f32,
     shards: Vec<Shard>,
 }
 
 const BURST_OUT: f32 = 0.62;
 const BURST_STAGGER: f32 = 0.16;
 const BURST_HOLD: f32 = 0.75;
-const BURST_BACK: f32 = 1.05;
+const FALL_GRAVITY: f32 = 1900.0;
 
 impl Burst {
     /// Position on the outward timeline at `t` seconds, or None once everything is home again.
-    fn clock(t: f32) -> Option<f32> {
-        let span = BURST_OUT + BURST_STAGGER;
-        if t < span {
+    fn clock(&self, t: f32) -> Option<f32> {
+        if t < self.span {
             Some(t)
-        } else if t < span + BURST_HOLD {
-            Some(span)
-        } else if t < span + BURST_HOLD + BURST_BACK {
-            let u = (t - span - BURST_HOLD) / BURST_BACK;
-            Some(span * (1.0 - u * u * (3.0 - 2.0 * u)))
+        } else if t < self.span + BURST_HOLD {
+            Some(self.span)
+        } else if t < self.span + BURST_HOLD + self.back {
+            let u = (t - self.span - BURST_HOLD) / self.back;
+            Some(self.span * (1.0 - u * u * (3.0 - 2.0 * u)))
         } else {
             None
         }
     }
-    /// How far part `index` is along its path (0 = home, 1 = fully flung).
-    fn amount(&self, index: usize, clock: f32) -> f32 {
-        ease((clock - self.shards[index].delay) / BURST_OUT)
-    }
     /// Move a point that belongs to part `index`, whose resting centre is `home`.
     fn place(&self, index: usize, clock: f32, home: Pos2, point: Pos2) -> Pos2 {
         let shard = &self.shards[index];
-        let k = self.amount(index, clock);
         let turn = |v: Vec2, angle: f32| vec2(v.x * angle.cos() - v.y * angle.sin(), v.x * angle.sin() + v.y * angle.cos());
-        home + turn(point - home, shard.spin * k) + turn(shard.off * k, shard.curl * (1.0 - k))
+        let t = clock - shard.delay;
+        match self.kind {
+            BurstKind::Explode => {
+                let k = ease(t / BURST_OUT);
+                home + turn(point - home, shard.spin * k) + turn(shard.off * k, shard.curl * (1.0 - k))
+            }
+            BurstKind::Fall if t <= 0.0 => {
+                // Still on the shelf: it rattles harder as its moment comes, and is still again
+                // at the instant it lets go so the drop starts cleanly.
+                let near = (1.0 + t / 0.5).clamp(0.0, 1.0);
+                let shake = near * (1.0 - near) * 4.0;
+                let phase = clock * 36.0 + index as f32 * 1.7;
+                home + turn(point - home, phase.sin() * 0.075 * shake) + vec2((phase * 0.83).cos() * 2.4 * shake, 0.0)
+            }
+            BurstKind::Fall => {
+                let drop = shard.off.y;
+                let landing = (2.0 * drop / FALL_GRAVITY).sqrt();
+                let fallen = if t < landing {
+                    0.5 * FALL_GRAVITY * t * t
+                } else {
+                    // One small bounce off the floor, then rest.
+                    let after = t - landing;
+                    let hop = FALL_GRAVITY * landing * 0.26 * after - 0.5 * FALL_GRAVITY * after * after;
+                    drop - hop.max(0.0)
+                };
+                let settle = ease(t / (landing + 0.3));
+                home + turn(point - home, shard.spin * settle) + vec2(shard.off.x * settle, fallen)
+            }
+        }
     }
 }
 
@@ -423,6 +459,7 @@ struct App {
     sparks: Vec<Spark>,
     burst: Option<Burst>,
     snap: Option<f64>,
+    taps: Vec<f64>,
     drag: Option<Drag>,
     turbo: bool,
     prev_rot: f32,
@@ -487,6 +524,7 @@ impl App {
             sparks: Vec::new(),
             burst: None,
             snap: None,
+            taps: Vec::new(),
             drag: None,
             turbo: false,
             prev_rot: 0.0,
@@ -653,7 +691,7 @@ impl App {
         self.genre_changed(now);
     }
     /// Throw every part of the wheel somewhere new. Targets, arcs, tumble and timing are all random.
-    fn start_burst(&mut self, now: f64) {
+    fn start_explode(&mut self, now: f64) {
         self.close_panel();
         let parts = self.cats.len() + 1 + CORNERS.len();
         let mut shards = Vec::with_capacity(parts);
@@ -670,13 +708,46 @@ impl App {
             let sign = if self.rand() < 0.5 { -1.0 } else { 1.0 };
             shards.push(Shard { off, curl: (self.rand() - 0.5) * 2.2, spin: sign * lerp(0.8, 3.4, self.rand()), delay: self.rand() * BURST_STAGGER });
         }
-        self.burst = Some(Burst { start: now, shards });
+        self.burst = Some(Burst { start: now, kind: BurstKind::Explode, span: BURST_OUT + BURST_STAGGER, back: 1.05, shards });
         for _ in 0..70 {
             let (angle, speed) = (self.rand() * 360.0, lerp(160.0, 720.0, self.rand()));
             let life = lerp(0.35, 0.9, self.rand());
             let from = C + polar(lerp(20.0, R_OUT, self.rand()), angle);
             self.spark(from, polar(speed, angle), life);
         }
+    }
+    /// Shaken loose: parts let go at random moments and drop to the floor, which is the bottom of
+    /// the screen's work area when the wheel sits low, otherwise the bottom of the window.
+    fn start_fall(&mut self, ctx: &egui::Context, now: f64) {
+        self.close_panel();
+        let ppp = ctx.pixels_per_point();
+        let mut floor = WIN.y - 8.0;
+        if let (Some(r), Some(w)) = (win::window_rect(self.hwnd), win::work_area(self.hwnd)) {
+            floor = floor.min((w[3] - r[1]) as f32 / ppp - 4.0);
+        }
+        let n = self.cats.len();
+        let step = 360.0 / n as f32;
+        let mut shards = Vec::with_capacity(n + 1 + CORNERS.len());
+        let mut span: f32 = 0.0;
+        for index in 0..n + 1 + CORNERS.len() {
+            // (resting centre, half height, how far it may wander sideways, how much it may tilt)
+            let (home, half, wander, tilt) = if index < n {
+                (C + polar((R_IN + R_OUT) / 2.0, self.rot + index as f32 * step), 30.0, 70.0, 1.3)
+            } else if index == n {
+                (C, R_CORE, 26.0, 0.0)
+            } else {
+                let (dx, dy) = CORNERS[index - n - 1];
+                (C + vec2(dx, dy), 17.0, 90.0, 2.6)
+            };
+            // Things land at slightly different heights, as if on top of one another.
+            let pile = if index == n { 0.0 } else { self.rand() * 44.0 };
+            let drop = (floor - half - pile - home.y).max(6.0);
+            let delay = 0.12 + self.rand() * 0.6;
+            let shard = Shard { off: vec2((self.rand() - 0.5) * 2.0 * wander, drop), curl: 0.0, spin: (self.rand() - 0.5) * 2.0 * tilt, delay };
+            span = span.max(delay + (2.0 * drop / FALL_GRAVITY).sqrt() + 0.42);
+            shards.push(shard);
+        }
+        self.burst = Some(Burst { start: now, kind: BurstKind::Fall, span, back: 1.35, shards });
     }
     /// Move the window with the pointer ourselves (no OS move loop), so frames keep coming and a
     /// shake can be seen as it happens. Returns true when the motion amounts to a shake.
@@ -869,6 +940,10 @@ impl App {
                 if index != self.active() {
                     self.turn_to(index);
                     self.genre_changed(now);
+                } else if self.panel == Panel::Closed {
+                    self.open_list(now, true);
+                } else {
+                    self.close_panel();
                 }
             }
             Action::Pick(k) => {
@@ -1017,15 +1092,15 @@ impl App {
                 self.drag = None;
             } else {
                 fx.anim = true;
-                if self.follow_drag(now) && self.burst.is_none() && !self.mini && self.mini_t > 0.98 {
-                    self.start_burst(now);
+                if self.follow_drag(now) && self.saved.play && self.burst.is_none() && !self.mini && self.mini_t > 0.98 {
+                    self.start_fall(&ctx, now);
                 }
             }
         }
         // While the wheel is in pieces nothing on it can be pointed at.
         let burst_clock = match &self.burst {
             Some(burst) => {
-                let clock = Burst::clock((now - burst.start) as f32);
+                let clock = burst.clock((now - burst.start) as f32);
                 if clock.is_none() {
                     self.snap = Some(now);
                 }
@@ -1041,6 +1116,16 @@ impl App {
         let scattered = self.burst.is_some();
         let ptr = if hot && !scattered { ui.input(|i| i.pointer.hover_pos()) } else { None };
         let click = if bg.clicked() && !scattered { bg.interact_pointer_pos() } else { None };
+        if let Some(p) = click {
+            if self.saved.play && !self.mini && p.distance(C) <= R_OUT + 10.0 {
+                self.taps.push(now);
+                self.taps.retain(|at| now - at <= 2.0);
+                if self.taps.len() >= 10 {
+                    self.taps.clear();
+                    self.start_explode(now);
+                }
+            }
+        }
         let mut io = Io { ptr, click, hand: false };
         let typing = ctx.egui_wants_keyboard_input();
         if hot {
@@ -1117,7 +1202,7 @@ impl App {
                     self.spin_streak = if now - self.spin_last < 0.2 && dir == self.spin_dir { self.spin_streak + 1 } else { 1 };
                     self.spin_last = now;
                     self.spin_dir = dir;
-                    if self.spin_streak >= 4 {
+                    if self.spin_streak >= 4 && self.saved.play {
                         self.spin_streak = 0;
                         self.turbo_spin(dir, now);
                     } else {
@@ -1667,17 +1752,13 @@ impl App {
         }
         y += 50.0;
 
-        let on = self.saved.pinned;
-        painter.text(pos2(left, y + 10.0), Align2::LEFT_CENTER, "常に最前面に表示", font(12.0, false), fade(SOFT, alpha));
-        let switch = Rect::from_min_size(pos2(right - 36.0, y), vec2(36.0, 20.0));
-        let response = ui.interact(switch.expand(4.0), ui.id().with("pin"), Sense::click());
-        painter.rect_filled(switch, 10.0, fade(if on { col } else { LINE }, alpha));
-        painter.circle_filled(pos2(if on { switch.right() - 10.0 } else { switch.left() + 10.0 }, switch.center().y), 7.0, fade(if on { DARK } else { SOFT }, alpha));
-        if response.hovered() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        if toggle_row(ui, painter, "pin", (left, right, y), "常に最前面に表示", self.saved.pinned, col, alpha) {
+            fx.actions.push(Action::Pin(!self.saved.pinned));
         }
-        if response.clicked() {
-            fx.actions.push(Action::Pin(!on));
+        y += 32.0;
+        if toggle_row(ui, painter, "play", (left, right, y), "遊びの演出（火花・落下・爆散）", self.saved.play, col, alpha) {
+            self.saved.play = !self.saved.play;
+            self.dirty = Some(self.last_frame);
         }
         y += 34.0;
 
@@ -1728,6 +1809,21 @@ fn slider_row(ui: &mut egui::Ui, painter: &egui::Painter, id: &str, at: Pos2, wi
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     (changed, response.drag_stopped() || response.clicked())
+}
+
+/// A label with a switch at the right edge. Returns true when it was clicked.
+#[allow(clippy::too_many_arguments)]
+fn toggle_row(ui: &mut egui::Ui, painter: &egui::Painter, id: &str, span: (f32, f32, f32), label: &str, on: bool, col: Color32, alpha: f32) -> bool {
+    let (left, right, y) = span;
+    painter.text(pos2(left, y + 10.0), Align2::LEFT_CENTER, label, font(12.0, false), fade(SOFT, alpha));
+    let switch = Rect::from_min_size(pos2(right - 36.0, y), vec2(36.0, 20.0));
+    let response = ui.interact(switch.expand(4.0), ui.id().with(id), Sense::click());
+    painter.rect_filled(switch, 10.0, fade(if on { col } else { LINE }, alpha));
+    painter.circle_filled(pos2(if on { switch.right() - 10.0 } else { switch.left() + 10.0 }, switch.center().y), 7.0, fade(if on { DARK } else { SOFT }, alpha));
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response.clicked()
 }
 
 /// Outlined pill; `ink` colours both the label and, on hover, the outline.
