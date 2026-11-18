@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-//! Kneekura Prompt Wheeler — a translucent prompt wheel that floats on the desktop.
+//! Love愛ドーナツ (Kneekura Prompt Wheeler) — a translucent prompt wheel that floats on the desktop.
 //!
 //! No GPU and no webview: egui lays the interface out, a CPU rasteriser paints it into a
 //! 32-bit bitmap, and Windows composites that bitmap as a per-pixel-alpha layered window.
@@ -23,7 +23,7 @@ use winit::platform::windows::WindowAttributesExtWindows;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::{Window, WindowId, WindowLevel};
 
-const TITLE: &str = "Kneekura Prompt Wheeler";
+const TITLE: &str = "Love愛ドーナツ";
 const WIN: Vec2 = Vec2::new(960.0, 600.0);
 const C: Pos2 = Pos2::new(480.0, 300.0);
 const R_OUT: f32 = 150.0;
@@ -35,6 +35,7 @@ const PANEL_W: f32 = 300.0;
 const PANEL_GAP: f32 = 16.0;
 const PANEL_H: f32 = 416.0;
 const DWELL: f64 = 1.5;
+const TURBO_NOTCHES: f32 = 9.0;
 const CORNERS: [(f32, f32); 4] = [(-139.0, -139.0), (139.0, -139.0), (139.0, 139.0), (-139.0, 139.0)];
 
 // Sumi-ink ground with warm paper-coloured type; the genre colours (data/prompts.json) are
@@ -463,9 +464,8 @@ struct App {
     drag: Option<Drag>,
     turbo: bool,
     prev_rot: f32,
-    spin_streak: u32,
-    spin_last: f64,
-    spin_dir: i32,
+    /// Recent raw wheel notches (time, amount), for telling a flick from ordinary scrolling.
+    notches: Vec<(f64, f32)>,
     wheel_acc: f32,
     wheel_at: f64,
 }
@@ -480,7 +480,7 @@ impl App {
         let (cats, base) = data::load_catalog();
         let items = data::merge(&cats, &base, &saved);
         let request = Arc::new(AtomicU8::new(0));
-        let tray = build_tray(ctx, &cats, request.clone());
+        let tray = build_tray(ctx, request.clone());
         let mini = saved.mini;
         Self {
             cats,
@@ -528,9 +528,7 @@ impl App {
             drag: None,
             turbo: false,
             prev_rot: 0.0,
-            spin_streak: 0,
-            spin_last: 0.0,
-            spin_dir: 0,
+            notches: Vec::new(),
             wheel_acc: 0.0,
             wheel_at: 0.0,
         }
@@ -1067,6 +1065,10 @@ impl App {
             self.wheel_acc = 0.0;
         }
         self.wheel_acc = (self.wheel_acc + dy).clamp(-8.0, 8.0);
+        if dy != 0.0 {
+            self.notches.push((now, dy.abs()));
+        }
+        self.notches.retain(|(at, _)| now - at < 0.4);
         if self.wheel_acc.abs() >= 1.0 && now - self.wheel_at >= 0.07 {
             let dir = -self.wheel_acc.signum() as i32;
             self.wheel_acc -= self.wheel_acc.signum();
@@ -1171,6 +1173,14 @@ impl App {
                     let life = lerp(0.25, 0.75, self.rand());
                     self.spark(at, vel, life);
                 }
+                // A second, smaller spray off the top of the dial.
+                for _ in 0..count.div_ceil(3) {
+                    let at = C + polar(R_OUT + 2.0, -90.0 + (self.rand() - 0.5) * 8.0);
+                    let tangent = polar(1.0, -90.0 + 90.0 * heading);
+                    let vel = tangent * lerp(90.0, 300.0, self.rand()) * blur.max(0.35) + vec2(0.0, -lerp(20.0, 150.0, self.rand()));
+                    let life = lerp(0.18, 0.45, self.rand());
+                    self.spark(at, vel, life);
+                }
             }
         }
 
@@ -1198,12 +1208,12 @@ impl App {
                     self.step_selection(dir, now);
                     self.open_list(now, false);
                 } else if d <= R_OUT + 10.0 {
-                    // Four quick notches the same way is a flick: let the dial run.
-                    self.spin_streak = if now - self.spin_last < 0.2 && dir == self.spin_dir { self.spin_streak + 1 } else { 1 };
-                    self.spin_last = now;
-                    self.spin_dir = dir;
-                    if self.spin_streak >= 4 && self.saved.play {
-                        self.spin_streak = 0;
+                    // Only a real flick lets the dial run: nine or more notches inside 0.4 s, which
+                    // ordinary scrolling through genres does not reach.
+                    let flick: f32 = self.notches.iter().map(|(_, amount)| amount).sum();
+                    if flick >= TURBO_NOTCHES && self.saved.play {
+                        self.notches.clear();
+                        self.wheel_acc = 0.0;
                         self.turbo_spin(dir, now);
                     } else {
                         self.spin_genre(dir, now);
@@ -1958,26 +1968,12 @@ fn install_style(ctx: &egui::Context) {
     });
 }
 
-fn build_tray(ctx: &egui::Context, cats: &[Category], request: Arc<AtomicU8>) -> Option<tray_icon::TrayIcon> {
+fn build_tray(ctx: &egui::Context, request: Arc<AtomicU8>) -> Option<tray_icon::TrayIcon> {
     use tray_icon::menu::{Menu, MenuEvent, MenuItem};
     use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-    // 32x32 donut in the genre colours, drawn here so the app needs no image files.
-    const SIZE: usize = 32;
-    let mut rgba = vec![0u8; SIZE * SIZE * 4];
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let (dx, dy) = (x as f32 - 15.5, y as f32 - 15.5);
-            let d = dx.hypot(dy);
-            if (7.0..=15.0).contains(&d) {
-                let turn = (dy.atan2(dx).to_degrees() + 450.0) % 360.0 / 360.0;
-                let color = hex(&cats[((turn * cats.len() as f32) as usize).min(cats.len() - 1)].color);
-                let at = (y * SIZE + x) * 4;
-                rgba[at..at + 4].copy_from_slice(&[color.r(), color.g(), color.b(), 255]);
-            }
-        }
-    }
-    let icon = Icon::from_rgba(rgba, SIZE as u32, SIZE as u32).ok()?;
+    // 64x64 RGBA of the app icon, produced next to icon.ico (see assets/).
+    let icon = Icon::from_rgba(include_bytes!("../assets/tray-64.rgba").to_vec(), 64, 64).ok()?;
 
     let menu = Menu::new();
     let show = MenuItem::new("ホイールを画面中央に表示", true, None);
@@ -2002,5 +1998,5 @@ fn build_tray(ctx: &egui::Context, cats: &[Category], request: Arc<AtomicU8>) ->
             click_ctx.request_repaint();
         }
     }));
-    TrayIconBuilder::new().with_menu(Box::new(menu)).with_menu_on_left_click(false).with_tooltip("Kneekura Prompt Wheeler").with_icon(icon).build().ok()
+    TrayIconBuilder::new().with_menu(Box::new(menu)).with_menu_on_left_click(false).with_tooltip(TITLE).with_icon(icon).build().ok()
 }

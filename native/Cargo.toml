@@ -1,7 +1,7 @@
 [package]
-name = "kneekura-prompt-wheeler"
-version = "0.3.0"
-description = "Floating prompt wheel for the Windows desktop (native, no webview)"
+name = "love-ai-donut"
+version = "0.4.0"
+description = "Love愛ドーナツ: a floating prompt wheel for the Windows desktop (native, no webview)"
 authors = ["Kneekura"]
 edition = "2021"
 
@@ -22,6 +22,9 @@ windows-sys = { version = "0.59", features = [
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+[build-dependencies]
+winresource = "0.1"
 
 [profile.release]
 opt-level = 3
