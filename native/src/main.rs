@@ -56,7 +56,7 @@ const MUTED: Color32 = Color32::from_rgb(150, 140, 122);
 const LINE: Color32 = Color32::from_rgb(64, 58, 49);
 const GOLD: Color32 = Color32::from_rgb(236, 186, 72);
 const BAD: Color32 = Color32::from_rgb(234, 124, 98);
-const SETTINGS_H: f32 = 398.0;
+const SETTINGS_H: f32 = 416.0;
 
 const REQ_SHOW: u8 = 1;
 const REQ_QUIT: u8 = 2;
@@ -400,6 +400,8 @@ enum Action {
 struct Io {
     ptr: Option<Pos2>,
     click: Option<Pos2>,
+    /// Where a right click landed this frame.
+    rclick: Option<Pos2>,
     hand: bool,
 }
 impl Io {
@@ -1147,7 +1149,8 @@ impl App {
                 }
             }
         }
-        let mut io = Io { ptr, click, hand: false };
+        let rclick = if bg.secondary_clicked() && !scattered { bg.interact_pointer_pos() } else { None };
+        let mut io = Io { ptr, click, rclick, hand: false };
         let typing = ctx.egui_wants_keyboard_input();
         if hot {
             self.last_hot = now;
@@ -1371,6 +1374,12 @@ impl App {
         if core_clicked {
             if let Some(k) = current {
                 fx.actions.push(Action::Copy(k));
+            }
+        }
+        // Right-clicking the centre edits the prompt shown there.
+        if !self.mini && io.rclick.is_some_and(|p| p.distance(C) <= R_CORE) {
+            if let Some(k) = current {
+                fx.actions.push(Action::StartEdit(Some(k)));
             }
         }
         let r_core = lerp(R_PUCK - 12.0, R_CORE, m);
@@ -1656,6 +1665,9 @@ impl App {
                         let over_star = io.ptr.is_some_and(|p| star.contains(p));
                         clip.text(star.center(), Align2::CENTER_CENTER, if fav { "★" } else { "☆" }, font(13.0, false), fade(if fav { GOLD } else if over_star { TEXT } else { MUTED }, a));
                     }
+                    if io.rclick.is_some_and(|p| list.contains(p) && rect.contains(p)) {
+                        fx.actions.push(Action::StartEdit(Some(k)));
+                    }
                     if clicked {
                         let on_star = io.click.is_some_and(|p| star.contains(p));
                         fx.actions.push(if on_star { Action::ToggleFav(k) } else { Action::Pick(k) });
@@ -1793,7 +1805,7 @@ impl App {
 
         painter.line_segment([pos2(left, y), pos2(right, y)], Stroke::new(1.0_f32, fade(LINE, alpha)));
         y += 12.0;
-        for (key, what) in [("外輪でホイール", "ジャンルを回す"), ("中央でホイール", "プロンプトを切り替える"), ("回して1.5秒止める", "一覧が開く"), ("選択中のジャンル", "押すと一覧を開閉"), ("中央クリック", "コピー"), ("ドラッグ", "移動"), ("Esc", "一覧を閉じる／畳む")] {
+        for (key, what) in [("外輪でホイール", "ジャンルを回す"), ("中央でホイール", "プロンプトを切り替える"), ("回して1.5秒止める", "一覧が開く"), ("選択中のジャンル", "押すと一覧を開閉"), ("中央クリック", "コピー"), ("右クリック", "プロンプトを編集"), ("ドラッグ", "移動"), ("Esc", "一覧を閉じる／畳む")] {
             painter.text(pos2(left, y + 8.0), Align2::LEFT_CENTER, key, font(10.5, false), fade(MUTED, alpha));
             painter.text(pos2(left + 122.0, y + 8.0), Align2::LEFT_CENTER, what, font(10.5, false), fade(SOFT, alpha));
             y += 18.0;
