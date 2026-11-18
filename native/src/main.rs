@@ -56,7 +56,7 @@ const MUTED: Color32 = Color32::from_rgb(150, 140, 122);
 const LINE: Color32 = Color32::from_rgb(64, 58, 49);
 const GOLD: Color32 = Color32::from_rgb(236, 186, 72);
 const BAD: Color32 = Color32::from_rgb(234, 124, 98);
-const SETTINGS_H: f32 = 362.0;
+const SETTINGS_H: f32 = 398.0;
 
 const REQ_SHOW: u8 = 1;
 const REQ_QUIT: u8 = 2;
@@ -1793,9 +1793,9 @@ impl App {
 
         painter.line_segment([pos2(left, y), pos2(right, y)], Stroke::new(1.0_f32, fade(LINE, alpha)));
         y += 12.0;
-        for (key, what) in [("外輪でホイール", "ジャンルを回す"), ("中央でホイール", "プロンプトを送る"), ("1.5秒とめる", "一覧が開く"), ("ドラッグ", "移動"), ("Esc", "畳む")] {
+        for (key, what) in [("外輪でホイール", "ジャンルを回す"), ("中央でホイール", "プロンプトを送る"), ("回して1.5秒止める", "一覧が開く"), ("選択中のジャンル", "押すと一覧を開閉"), ("中央クリック", "コピー"), ("ドラッグ", "移動"), ("Esc", "一覧を閉じる／畳む")] {
             painter.text(pos2(left, y + 8.0), Align2::LEFT_CENTER, key, font(10.5, false), fade(MUTED, alpha));
-            painter.text(pos2(left + 112.0, y + 8.0), Align2::LEFT_CENTER, what, font(10.5, false), fade(SOFT, alpha));
+            painter.text(pos2(left + 122.0, y + 8.0), Align2::LEFT_CENTER, what, font(10.5, false), fade(SOFT, alpha));
             y += 18.0;
         }
         y += 12.0;
