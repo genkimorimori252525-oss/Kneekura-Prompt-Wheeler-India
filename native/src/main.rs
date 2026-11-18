@@ -1656,9 +1656,9 @@ impl App {
                     let g = galley(ui, &item.title, font(12.5, is_selected), fade(if is_selected { TEXT } else { SOFT }, a), list.width() - 96.0, 1, None, false);
                     let text_w = g.size().x;
                     clip.galley(pos2(x + 13.0, row_top + 5.5), g, TEXT);
-                    if item.origin != Origin::Builtin {
-                        let tag = if item.origin == Origin::Added { "自作" } else { "編集済" };
-                        clip.text(pos2(x + 13.0 + text_w + 7.0, row_top + ITEM_H / 2.0), Align2::LEFT_CENTER, tag, font(9.5, false), fade(col, a * 0.9));
+                    // Edited built-ins look like any other prompt; only ones you wrote yourself are marked.
+                    if item.origin == Origin::Added {
+                        clip.text(pos2(x + 13.0 + text_w + 7.0, row_top + ITEM_H / 2.0), Align2::LEFT_CENTER, "自作", font(9.5, false), fade(col, a * 0.9));
                     }
                     let fav = self.is_fav(k);
                     if fav || hovered || is_selected {
